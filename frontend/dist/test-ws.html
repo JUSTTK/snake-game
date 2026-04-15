@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket 测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #fff;
+        }
+        .input-group {
+            margin: 10px 0;
+        }
+        input, button {
+            padding: 8px 12px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+        }
+        input {
+            background-color: #333;
+            color: #fff;
+            width: 200px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+        #log {
+            background-color: #222;
+            padding: 10px;
+            margin-top: 20px;
+            height: 300px;
+            overflow-y: auto;
+            border-radius: 4px;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .log-info {
+            background-color: #2196F3;
+        }
+        .log-error {
+            background-color: #f44336;
+        }
+        .log-success {
+            background-color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <h1>WebSocket 连接测试</h1>
+
+    <div class="input-group">
+        <label>房间ID: <input type="text" id="roomId" value="test-room"></label>
+        <label>玩家ID: <input type="text" id="playerId" value="player1"></label>
+        <label>玩家名称: <input type="text" id="playerName" value="测试玩家"></label>
+    </div>
+
+    <div>
+        <button id="connectBtn">连接</button>
+        <button id="disconnectBtn" disabled>断开连接</button>
+        <button id="sendStartBtn" disabled>开始游戏</button>
+    </div>
+
+    <div id="log"></div>
+
+    <script>
+        let ws = null;
+        const log = document.getElementById('log');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const sendStartBtn = document.getElementById('sendStartBtn');
+
+        function addLog(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        connectBtn.addEventListener('click', () => {
+            const roomId = document.getElementById('roomId').value;
+            const playerId = document.getElementById('playerId').value;
+            const playerName = document.getElementById('playerName').value;
+
+            if (!roomId || !playerId || !playerName) {
+                addLog('请填写所有字段', 'error');
+                return;
+            }
+
+            const wsUrl = `ws://localhost:8080/ws?room_id=${roomId}&player_id=${playerId}&player_name=${playerName}`;
+            addLog(`正在连接: ${wsUrl}`, 'info');
+
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    addLog('连接成功！', 'success');
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                    sendStartBtn.disabled = false;
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        let data;
+                        if (event.data instanceof Blob) {
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                                try {
+                                    const message = JSON.parse(reader.result as string);
+                                    addLog(`收到消息: ${JSON.stringify(message)}`, 'info');
+
+                                    if (message.type === 'GAME_STATE') {
+                                        addLog('游戏状态更新', 'success');
+                                    } else if (message.type === 'ERROR') {
+                                        addLog(`错误: ${message.data}`, 'error');
+                                    }
+                                } catch (error) {
+                                    addLog(`解析Blob数据错误: ${error}`, 'error');
+                                }
+                            };
+                            reader.readAsText(event.data);
+                            return;
+                        } else {
+                            data = event.data;
+                        }
+
+                        const message = JSON.parse(data);
+                        addLog(`收到消息: ${JSON.stringify(message)}`, 'info');
+
+                        if (message.type === 'GAME_STATE') {
+                            addLog('游戏状态更新', 'success');
+                        } else if (message.type === 'ERROR') {
+                            addLog(`错误: ${message.data}`, 'error');
+                        }
+                    } catch (error) {
+                        addLog(`解析消息错误: ${error}`, 'error');
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    addLog(`连接错误: ${error}`, 'error');
+                };
+
+                ws.onclose = () => {
+                    addLog('连接已关闭', 'info');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    sendStartBtn.disabled = true;
+                };
+            } catch (error) {
+                addLog(`创建连接失败: ${error}`, 'error');
+            }
+        });
+
+        disconnectBtn.addEventListener('click', () => {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        });
+
+        sendStartBtn.addEventListener('click', () => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'START_GAME' }));
+                addLog('发送了开始游戏指令', 'info');
+            }
+        });
+    </script>
+</body>
+</html>
