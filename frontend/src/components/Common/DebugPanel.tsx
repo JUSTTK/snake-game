@@ -8,9 +8,9 @@ export const DebugPanel: React.FC = () => {
     try {
       const response = await fetch('/api/rooms');
       const data = await response.json();
-      console.log('API Response:', data);
+      console.log('API 返回结果:', data);
     } catch (err) {
-      console.error('API Error:', err);
+      console.error('API 请求失败:', err);
     }
   };
 
@@ -24,10 +24,10 @@ export const DebugPanel: React.FC = () => {
         测试 API
       </button>
       <div className="space-y-1 text-sm text-gray-300">
-        <p>连接状态: {connected ? '已连接' : '未连接'}</p>
-        <p>房间状态: {room ? '已加入房间' : '未加入房间'}</p>
-        <p>我的蛇 ID: {mySnakeId || '无'}</p>
-        {error && <p className="text-red-400">错误: {error}</p>}
+        <p>连接状态：{connected ? '已连接' : '未连接'}</p>
+        <p>房间状态：{room ? '已加入房间' : '未加入房间'}</p>
+        <p>我的蛇 ID：{mySnakeId || '无'}</p>
+        {error && <p className="text-red-400">错误：{error}</p>}
       </div>
     </div>
   );

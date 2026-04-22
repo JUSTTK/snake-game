@@ -240,7 +240,9 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-900 p-4">
       <div className="w-full max-w-4xl rounded-lg bg-gray-800 p-6 shadow-xl">
-        <h1 className="mb-6 text-center text-3xl font-bold text-white">贪吃蛇 - 单机模式</h1>
+        <h1 className="mb-6 text-center text-3xl font-bold text-white">
+          贪吃蛇游戏 - 单机模式
+        </h1>
 
         <div className="mb-4 flex justify-between">
           <SinglePlayerScoreBoard score={score} highScore={highScore} />
@@ -258,7 +260,7 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
         />
 
         <div className="mt-4 text-center text-sm text-gray-400">
-          <p>使用方向键或 WASD 控制移动，空格键暂停或继续</p>
+          <p>使用方向键或 WASD 控制移动，按空格键可以暂停或继续。</p>
         </div>
       </div>
     </div>

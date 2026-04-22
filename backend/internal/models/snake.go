@@ -1,6 +1,9 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	"log"
+	"github.com/google/uuid"
+)
 
 type Point struct {
 	X int `json:"x"`
@@ -32,8 +35,21 @@ func NewSnake(playerID, name string, startPos Point) *Snake {
 		ID:       uuid.New().String(),
 		PlayerID: playerID,
 		Name:     name,
-		Body:     []Point{startPos},
+		Body:     []Point{startPos, {X: startPos.X - 1, Y: startPos.Y}, {X: startPos.X - 2, Y: startPos.Y}},
 		Direction: Right,
+		Alive:    true,
+		Color:    "#4ade80",
+		Score:    0,
+	}
+}
+
+func NewSnakeWithBody(playerID, name string, body []Point, direction Direction) *Snake {
+	return &Snake{
+		ID:       uuid.New().String(),
+		PlayerID: playerID,
+		Name:     name,
+		Body:     body,
+		Direction: direction,
 		Alive:    true,
 		Color:    "#4ade80",
 		Score:    0,
@@ -42,6 +58,7 @@ func NewSnake(playerID, name string, startPos Point) *Snake {
 
 func (s *Snake) Move() {
 	if !s.Alive {
+		log.Printf("Snake %s is not alive, skipping move", s.ID)
 		return
 	}
 

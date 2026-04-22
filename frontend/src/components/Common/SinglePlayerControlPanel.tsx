@@ -19,7 +19,7 @@ export const SinglePlayerControlPanel: React.FC<SinglePlayerControlPanelProps> =
       case 'idle':
         return '准备开始';
       case 'playing':
-        return '游戏中';
+        return '游戏进行中';
       case 'paused':
         return '已暂停';
       case 'gameOver':
@@ -33,7 +33,7 @@ export const SinglePlayerControlPanel: React.FC<SinglePlayerControlPanelProps> =
     <div className="flex flex-col space-y-4">
       <div className="text-center">
         <p className="text-white">
-          状态: <span className="font-bold">{getStatusText()}</span>
+          当前状态：<span className="font-bold">{getStatusText()}</span>
         </p>
       </div>
 
@@ -64,9 +64,9 @@ export const SinglePlayerControlPanel: React.FC<SinglePlayerControlPanelProps> =
       </div>
 
       <div className="mt-4 text-sm text-gray-400">
-        <p>控制说明:</p>
-        <p>方向键 ↑ ↓ ← → 或 WASD 控制移动</p>
-        <p>空格键暂停/继续</p>
+        <p>操作说明：</p>
+        <p>方向键或 WASD 控制移动</p>
+        <p>空格键暂停或继续</p>
       </div>
     </div>
   );

@@ -1,17 +1,41 @@
-# 贪吃蛇游戏
+# 贪吃蛇游戏 🐍
 
-一个基于 Go 后端和 React 前端的贪吃蛇项目，包含单机模式和多人模式。
+一条蛇，一块棋盘，两种节奏。
 
-## 项目特点
+这里既有适合一个人安静刷分的单机模式，也有需要多人同场博弈的房间模式。前端负责把每一次转向、每一步移动、每一口吃到食物的瞬间画出来；后端负责让多人对局真正“跑起来”。
 
-- 单机模式：前端本地运行游戏逻辑
-- 多人模式：Go 后端维护房间和游戏状态，前端通过 WebSocket 同步
-- 画面使用 Canvas 渲染
-- 支持暂停、继续、重新开始、离开房间
-- 多人模式下方向键或 `WASD` 每按一次前进一步
-- 多人模式下空格键可暂停或继续
+## 🎮 这项目现在能玩什么
 
-## 技术栈
+### 单机模式 🧍
+
+适合想立刻开一局的人。
+
+- 打开页面就能开始
+- 游戏逻辑运行在前端本地
+- 方向键或 `WASD` 控制方向
+- 空格键暂停或继续
+- 撞墙或撞到自己后结束
+- 页面会记录当前分数和最高分
+
+### 多人模式 👥
+
+适合两个人以上一起进房间抢节奏。
+
+- 玩家通过 `roomID` 进入同一个房间
+- 后端统一维护蛇身、食物、房间状态和胜负判定
+- 点击“开始游戏”后，蛇会自动持续前进
+- 方向键或 `WASD` 改变方向
+- 空格键可以暂停或继续
+- 游戏结束后支持“重新开始”
+
+## ✨ 为什么它和普通练手项目不太一样
+
+- 不只是前端动画，而是带真实后端状态同步的多人模式
+- 多人模式的蛇不是“按一下走一下”，而是开始后自动持续运动
+- 支持开始、暂停、继续、重新开始、离开房间这些完整流程
+- 前端和后端职责分明，适合拿来做联调、练 WebSocket、练状态管理
+
+## 🧰 技术栈
 
 ### 后端
 
@@ -27,53 +51,46 @@
 - Tailwind CSS
 - Zustand
 
-### 部署
+### 部署相关
 
 - Docker
 - Nginx
 - Docker Compose
 
-## 当前目录结构
+## 🗂️ 目录结构
 
 ```text
 snake-game/
-├─ backend/
-│  ├─ cmd/server/main.go
-│  ├─ internal/
-│  │  ├─ config/
-│  │  ├─ handlers/
-│  │  ├─ models/
-│  │  └─ services/
-│  ├─ Dockerfile
-│  ├─ go.mod
-│  └─ go.sum
-├─ frontend/
-│  ├─ src/
-│  │  ├─ components/
-│  │  ├─ hooks/
-│  │  ├─ services/
-│  │  ├─ store/
-│  │  ├─ types/
-│  │  ├─ App.tsx
-│  │  └─ main.tsx
-│  ├─ Dockerfile
-│  ├─ nginx.conf
-│  ├─ package.json
-│  └─ vite.config.ts
-├─ docker-compose.yml
-├─ README.md
-├─ STARTUP_GUIDE.md
-├─ run-frontend.bat
-├─ run-server.bat
-├─ start-dev.bat
-└─ start-prod.bat
+|-- backend/
+|   |-- cmd/server/
+|   |-- internal/
+|   |   |-- config/
+|   |   |-- handlers/
+|   |   |-- models/
+|   |   `-- services/
+|   |-- Dockerfile
+|   `-- go.mod
+|-- frontend/
+|   |-- src/
+|   |   |-- components/
+|   |   |-- hooks/
+|   |   |-- services/
+|   |   |-- store/
+|   |   `-- types/
+|   |-- Dockerfile
+|   |-- nginx.conf
+|   `-- package.json
+|-- docker-compose.yml
+|-- README.md
+|-- STARTUP_GUIDE.md
+`-- TEST_GUIDE.md
 ```
 
-## 运行方式
-
-## 本地开发
+## 🚀 三步跑起来
 
 ### 1. 启动后端
+
+在项目根目录执行：
 
 ```bat
 cd backend
@@ -83,7 +100,7 @@ set GOPROXY=https://goproxy.cn,direct
 go run ./cmd/server
 ```
 
-默认地址：
+后端默认地址：
 
 ```text
 http://localhost:8081
@@ -91,67 +108,35 @@ http://localhost:8081
 
 ### 2. 启动前端
 
+另开一个终端执行：
+
 ```bat
 cd frontend
 npm install
 npm run dev -- --host
 ```
 
-默认地址通常为：
+前端默认地址：
 
 ```text
 http://localhost:5173
 ```
 
-## Windows 脚本
+### 3. 打开浏览器开始玩
 
-- `start-dev.bat`：同时启动后端和前端开发环境
-- `run-server.bat`：单独编译并启动后端
-- `run-frontend.bat`：单独启动前端开发服务器
-- `start-prod.bat`：使用 Docker Compose 启动容器环境
+- 单机模式：直接进入就能开始
+- 多人模式：两个窗口使用同一个 `roomID`，不同的 `playerID` 和 `playerName`
 
-## Docker 部署
+## 🔌 多人模式怎么通信
 
-```bash
-docker-compose up --build -d
-```
-
-默认访问：
-
-```text
-http://localhost
-```
-
-## 游戏说明
-
-## 单机模式
-
-- 在前端本地运行
-- 方向键或 `WASD` 控制方向
-- 空格键暂停或继续
-- 撞墙或撞到自己会结束
-- 分数与最高分显示在页面上
-
-## 多人模式
-
-- 输入 `roomID`、`playerID`、`playerName` 后进入房间
-- 相同 `roomID` 的玩家会进入同一房间
-- 至少 2 名玩家后才可开始
-- 方向键或 `WASD` 每按一次前进一步
-- 空格键暂停或继续
-- 吃到食物后得分并增长
-- 存活到最后的玩家获胜
-
-## API 与通信
-
-## HTTP 接口
+### HTTP 接口
 
 - `GET /api/rooms`
 - `POST /api/rooms`
 - `POST /api/rooms/:id/join`
 - `GET /health`
 
-## WebSocket
+### WebSocket
 
 连接格式：
 
@@ -159,7 +144,7 @@ http://localhost
 ws://localhost:8081/ws?room_id=xxx&player_id=xxx&player_name=xxx
 ```
 
-客户端发送：
+客户端常用消息：
 
 ```json
 { "type": "MOVE", "data": "UP" }
@@ -170,61 +155,67 @@ ws://localhost:8081/ws?room_id=xxx&player_id=xxx&player_name=xxx
 { "type": "LEAVE" }
 ```
 
-服务端发送：
+服务端会持续广播最新 `GAME_STATE`，前端根据它刷新棋盘、玩家状态和按钮状态。
 
-```json
-{
-  "type": "GAME_STATE",
-  "data": {
-    "room_id": "test-room",
-    "game_state": "PLAYING",
-    "players": [],
-    "foods": [],
-    "map_size": { "x": 20, "y": 15 },
-    "player_count": 2
-  }
-}
-```
+## 🖥️ Windows 下现成可用的脚本
 
-## 注意事项
+- `start-dev.bat`：同时启动前后端开发环境
+- `run-server.bat`：编译并启动后端
+- `run-frontend.bat`：启动前端开发服务器
+- `start-prod.bat`：执行 `docker-compose up --build -d`
 
-### 1. 本地开发是当前最稳的运行方式
+## 👍 当前最推荐的使用方式
 
-当前前端 WebSocket 地址写死为：
+如果你是来开发、联调或者验收功能，最推荐直接使用本地启动：
+
+- 后端：`go run ./cmd/server`
+- 前端：`npm run dev -- --host`
+
+原因很简单：
+
+- 日志最清楚
+- 问题最好定位
+- 当前多人模式默认就是连 `localhost:8081`
+
+## 🐳 Docker 现在能不能直接用
+
+可以用，但需要带着“已知风险”去用。
+
+当前仓库里存在一处历史配置差异：
+
+- `docker-compose.yml` 中后端映射的是 `8081:8081`
+- `frontend/nginx.conf` 里 `/api` 和 `/ws` 代理目标仍写成 `backend:8080`
+
+这意味着本地开发模式最稳，而 Docker 跑通前最好先确认代理端口是否要改成 `8081`。
+
+## ✅ 快速自检
+
+后端健康检查：
 
 ```text
-ws://localhost:8081/ws
+http://localhost:8081/health
 ```
 
-所以本地联调最稳定。
-
-### 2. Docker 配置存在端口对齐风险
-
-当前代码默认后端端口是 `8081`，但 Docker 和 Nginx 配置使用的是 `8080`。
-
-如果你要正式走 Docker 部署，建议至少处理：
-
-- 为后端容器显式设置 `SERVER_PORT=8080`
-- 将前端 WebSocket 地址改为相对路径 `/ws`
-- 确保 Nginx 反向代理端口与后端实际监听端口一致
-
-## 开发验证
-
-### 后端
-
-```bash
-cd backend
-go build ./...
-```
-
-### 前端
+前端构建验证：
 
 ```bash
 cd frontend
 npm run build
 ```
 
-## 补充文档
+如果你想快速验证多人模式，最简单的方法是：
 
-- 设计文档：`贪吃蛇游戏设计文档_Go版.md`
-- 启动指南：`STARTUP_GUIDE.md`
+1. 启动后端
+2. 启动前端
+3. 打开两个浏览器窗口
+4. 输入相同的 `roomID`
+5. 点击开始游戏
+6. 测试自动移动、方向切换、空格暂停和重新开始
+
+## 📚 相关文档
+
+- [启动指南](./STARTUP_GUIDE.md)
+- [测试指南](./TEST_GUIDE.md)
+- [设计文档](../贪吃蛇游戏设计文档_Go版.md)
+
+如果你是第一次接手这个项目，建议先看 `README` 了解全貌，再看 `STARTUP_GUIDE.md` 按步骤启动，最后用 `TEST_GUIDE.md` 做功能回归。

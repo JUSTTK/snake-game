@@ -8,9 +8,9 @@ import { GameBoard } from './GameBoard';
 const getStateLabel = (state: string) => {
   switch (state) {
     case 'WAITING':
-      return '等待中';
+      return '等待开始';
     case 'PLAYING':
-      return '游戏中';
+      return '游戏进行中';
     case 'PAUSED':
       return '已暂停';
     case 'FINISHED':
@@ -28,11 +28,11 @@ export const GameUI: React.FC = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-900">
         <div className="text-center">
-          <div className="mb-4 text-xl text-white">加载中...</div>
+          <div className="mb-4 text-xl text-white">正在加载游戏房间...</div>
           <div className="text-sm text-gray-400">
-            连接状态: {connected ? '已连接' : '未连接'}
+            连接状态：{connected ? '已连接' : '未连接'}
           </div>
-          {error && <div className="mt-2 text-sm text-red-400">错误: {error}</div>}
+          {error && <div className="mt-2 text-sm text-red-400">错误：{error}</div>}
         </div>
       </div>
     );
@@ -43,7 +43,7 @@ export const GameUI: React.FC = () => {
       <div className="mx-auto max-w-7xl">
         <div className="mb-6 text-center">
           <h1 className="mb-2 text-4xl font-bold text-white">贪吃蛇游戏</h1>
-          <p className="text-gray-400">房间: {room.name}</p>
+          <p className="text-gray-400">房间：{room.name}</p>
         </div>
 
         <div className="mb-4 text-center">
@@ -118,13 +118,13 @@ export const GameUI: React.FC = () => {
             <ScoreBoard players={room.players} mySnakeId={mySnakeId} />
 
             <div className="mt-6 rounded-lg bg-gray-800 p-6 shadow-lg">
-              <h3 className="mb-3 text-xl font-bold text-white">游戏说明</h3>
+              <h3 className="mb-3 text-xl font-bold text-white">操作说明</h3>
               <ul className="space-y-2 text-sm text-gray-300">
-                <li>使用方向键或 WASD 控制蛇移动</li>
-                <li>每按一次方向键前进一格</li>
-                <li>空格键可暂停或继续游戏</li>
-                <li>吃到食物可以增加分数</li>
-                <li>撞墙或撞到身体会导致失败</li>
+                <li>使用方向键或 WASD 控制蛇的移动方向。</li>
+                <li>开始游戏后，蛇会自动持续前进。</li>
+                <li>按空格键可以暂停或继续游戏。</li>
+                <li>吃到食物会增加分数并让蛇变长。</li>
+                <li>撞墙或撞到自己会导致本局失败。</li>
               </ul>
             </div>
           </div>

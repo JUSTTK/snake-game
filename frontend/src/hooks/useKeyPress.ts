@@ -53,6 +53,7 @@ export const useKeyPress = () => {
           if (event.repeat) {
             return;
           }
+
           if (gameState === 'PLAYING') {
             pauseGame();
           } else if (gameState === 'PAUSED') {
@@ -63,8 +64,6 @@ export const useKeyPress = () => {
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [connected, gameState, moveSnake, pauseGame, resumeGame]);
 };

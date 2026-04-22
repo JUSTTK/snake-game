@@ -4,7 +4,10 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8080:8080"
+      - "8081:8081"
+    environment:
+      - GIN_MODE=release
+      - SERVER_PORT=8081
     environment:
       - GIN_MODE=release
     networks:

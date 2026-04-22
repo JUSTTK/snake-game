@@ -25,10 +25,17 @@ type HTTPWebSocketHandler struct {
 }
 
 func NewHTTPWebSocketHandler(gameService *services.GameService) *HTTPWebSocketHandler {
-	return &HTTPWebSocketHandler{
+	handler := &HTTPWebSocketHandler{
 		gameService:     gameService,
 		roomConnections: make(map[string][]*websocket.Conn),
 	}
+
+	// 设置状态更新回调，当游戏状态变化时自动广播
+	gameService.SetStateUpdateCallback(func(roomID string) {
+		handler.sendGameStateToRoom(roomID)
+	})
+
+	return handler
 }
 
 func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
@@ -107,26 +114,39 @@ func (h *HTTPWebSocketHandler) handleMessages(ws *websocket.Conn, roomID, player
 			return
 		}
 
+		log.Printf("Received message from %s in room %s: %s", playerID, roomID, string(data))
+
 		var msg WebSocketMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			log.Printf("JSON unmarshal error: %v", err)
 			continue
 		}
 
+		log.Printf("Parsed message: Type=%s, Data=%v", msg.Type, msg.Data)
+
 		switch msg.Type {
 		case "MOVE":
 			if direction, ok := msg.Data.(string); ok {
+				log.Printf("Processing MOVE: %s", direction)
 				if h.gameService.MoveSnake(roomID, playerID, models.Direction(direction)) {
 					h.sendGameStateToRoom(roomID)
 				}
 			}
 		case "START_GAME":
+			log.Printf("Processing START_GAME")
 			if h.gameService.StartGame(roomID) {
+				log.Printf("Game started successfully, sending game state")
 				h.sendGameStateToRoom(roomID)
+			} else {
+				log.Printf("Failed to start game (not enough players or invalid state)")
 			}
 		case "RESTART_GAME":
+			log.Printf("Processing RESTART_GAME for room %s", roomID)
 			if h.gameService.RestartGame(roomID) {
+				log.Printf("Game restarted successfully, sending game state")
 				h.sendGameStateToRoom(roomID)
+			} else {
+				log.Printf("Failed to restart game")
 			}
 		case "PAUSE":
 			if h.gameService.PauseGame(roomID) {

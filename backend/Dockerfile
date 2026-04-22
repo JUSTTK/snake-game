@@ -26,7 +26,7 @@ COPY --from=builder /app/server .
 COPY --from=builder /app/websocket /root/websocket
 
 # 暴露端口
-EXPOSE 8080
+EXPOSE 8081
 
 # 运行应用
 CMD ["./server"]

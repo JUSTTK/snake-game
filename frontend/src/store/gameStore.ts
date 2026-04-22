@@ -3,14 +3,11 @@ import { Room, GameState, Snake, Direction } from '../types/game';
 import { gameAPI } from '../services/api';
 
 interface GameStateStore {
-  // State
   room: Room | null;
   gameState: GameState | null;
   mySnakeId: string | null;
   connected: boolean;
   error: string | null;
-
-  // Actions
   setRoom: (room: Room) => void;
   setMySnakeId: (snakeId: string) => void;
   setConnected: (connected: boolean) => void;
@@ -26,14 +23,12 @@ interface GameStateStore {
 }
 
 export const useGameStore = create<GameStateStore>((set, get) => ({
-  // Initial state
   room: null,
   gameState: null,
   mySnakeId: null,
   connected: false,
   error: null,
 
-  // Actions
   setRoom: (room) => set({ room, gameState: room.game_state }),
   setMySnakeId: (snakeId) => set({ mySnakeId: snakeId }),
   setConnected: (connected) => set({ connected }),
@@ -58,9 +53,7 @@ export const useGameStore = create<GameStateStore>((set, get) => ({
     if (connected && gameState === 'PLAYING') {
       set((state) => ({
         gameState: 'PAUSED',
-        room: state.room
-          ? { ...state.room, game_state: 'PAUSED' }
-          : null,
+        room: state.room ? { ...state.room, game_state: 'PAUSED' } : null,
       }));
       gameAPI.sendMessage('PAUSE');
     }
@@ -71,9 +64,7 @@ export const useGameStore = create<GameStateStore>((set, get) => ({
     if (connected && gameState === 'PAUSED') {
       set((state) => ({
         gameState: 'PLAYING',
-        room: state.room
-          ? { ...state.room, game_state: 'PLAYING' }
-          : null,
+        room: state.room ? { ...state.room, game_state: 'PLAYING' } : null,
       }));
       gameAPI.sendMessage('RESUME');
     }
@@ -95,41 +86,49 @@ export const useGameStore = create<GameStateStore>((set, get) => ({
   },
 
   connect: async (roomID: string, playerID: string, playerName: string) => {
-    console.log('Game store connecting to room:', roomID, playerID, playerName);
+    console.log('正在加入房间:', roomID, playerID, playerName);
+
     try {
-      // Subscribe before connecting so the first GAME_STATE isn't missed
       gameAPI.onGameState((message) => {
-        console.log('Game state received:', message);
+        console.log('收到游戏状态:', message);
         const data = message.data;
         if (data) {
-          console.log('Room data:', data);
           set({ room: data, gameState: data.game_state });
 
-          // Find and store my snake ID
           if (data.players) {
-            const mySnake = data.players.find((p: Snake) =>
-              p.player_id === playerID
-            );
+            const mySnake = data.players.find((p: Snake) => p.player_id === playerID);
             if (mySnake) {
               set({ mySnakeId: mySnake.id });
-              console.log('Found my snake:', mySnake);
+              console.log('已识别当前玩家的蛇:', mySnake);
             }
           }
         }
       });
 
-      // Handle errors
       gameAPI.onError((message) => {
-        console.error('WebSocket error:', message);
-        set({ error: message.data });
+        console.error('WebSocket 错误:', message);
+        const errorMessage = message.data || '发生未知错误。';
+        set({ error: errorMessage });
+      });
+
+      gameAPI.onConnectionStateChange((connected) => {
+        console.log('连接状态变化:', connected);
+        if (connected) {
+          set({ connected, error: null });
+        } else {
+          set({ connected, error: '连接已断开，正在尝试重新连接...' });
+        }
       });
 
       await gameAPI.connect(roomID, playerID, playerName);
-      console.log('Connected to server');
+      console.log('已连接到服务器');
       set({ connected: true, error: null });
     } catch (error) {
-      console.error('Connection failed:', error);
-      set({ error: 'Failed to connect to game server' });
+      console.error('连接失败:', error);
+      set({
+        connected: false,
+        error: '连接服务器失败，请检查网络连接后重试。',
+      });
     }
   },
 
@@ -140,7 +139,7 @@ export const useGameStore = create<GameStateStore>((set, get) => ({
       room: null,
       gameState: null,
       mySnakeId: null,
-      error: null
+      error: null,
     });
   },
 }));
