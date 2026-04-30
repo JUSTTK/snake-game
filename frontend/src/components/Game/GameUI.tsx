@@ -68,8 +68,9 @@ export const GameUI: React.FC = () => {
           </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
-          <div className="lg:col-span-1">
+        <div className="space-y-6">
+          {/* Game Controls and Scoreboard on top row */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div className="rounded-lg bg-gray-800 p-6 shadow-lg">
               <h3 className="mb-4 text-xl font-bold text-white">游戏控制</h3>
               <div className="space-y-4">
@@ -110,31 +111,30 @@ export const GameUI: React.FC = () => {
                 />
               </div>
             </div>
-          </div>
 
-          <div className="lg:col-span-2">
             <div className="rounded-lg bg-gray-800 p-6 shadow-lg">
-              <div className="mb-4 flex justify-center">
-                <ViewSwitcher viewMode={viewMode} onViewModeChange={setViewMode} />
-              </div>
-              <div className="flex justify-center">
-                <ThreeJSGameBoard room={room} viewMode={viewMode} cellSize={cellSize} fixedWidth={800} fixedHeight={800} />
+              <ScoreBoard players={room.players} mySnakeId={mySnakeId} />
+
+              <div className="mt-6">
+                <h3 className="mb-3 text-xl font-bold text-white">操作说明</h3>
+                <ul className="space-y-2 text-sm text-gray-300">
+                  <li>使用方向键或 WASD 控制蛇的移动方向。</li>
+                  <li>开始游戏后，蛇会自动持续前进。</li>
+                  <li>按空格键可以暂停或继续游戏。</li>
+                  <li>吃到食物会增加分数并让蛇变长。</li>
+                  <li>撞墙或撞到自己会导致本局失败。</li>
+                </ul>
               </div>
             </div>
           </div>
 
-          <div className="lg:col-span-1">
-            <ScoreBoard players={room.players} mySnakeId={mySnakeId} />
-
-            <div className="mt-6 rounded-lg bg-gray-800 p-6 shadow-lg">
-              <h3 className="mb-3 text-xl font-bold text-white">操作说明</h3>
-              <ul className="space-y-2 text-sm text-gray-300">
-                <li>使用方向键或 WASD 控制蛇的移动方向。</li>
-                <li>开始游戏后，蛇会自动持续前进。</li>
-                <li>按空格键可以暂停或继续游戏。</li>
-                <li>吃到食物会增加分数并让蛇变长。</li>
-                <li>撞墙或撞到自己会导致本局失败。</li>
-              </ul>
+          {/* Full-width game board */}
+          <div className="rounded-lg bg-gray-800 p-6 shadow-lg">
+            <div className="mb-4 flex justify-center">
+              <ViewSwitcher viewMode={viewMode} onViewModeChange={setViewMode} />
+            </div>
+            <div className="flex justify-center overflow-x-auto">
+              <ThreeJSGameBoard room={room} viewMode={viewMode} cellSize={cellSize} fixedWidth={800} fixedHeight={800} />
             </div>
           </div>
         </div>
