@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import { Room, GameState, Snake, Direction } from '../types/game';
 import { gameAPI } from '../services/api';
+import { soundManager } from '../services/soundManager';
 
 interface GameStateStore {
   room: Room | null;
   gameState: GameState | null;
   mySnakeId: string | null;
+  myPreviousScore: number;
+  myWasAlive: boolean;
   connected: boolean;
   error: string | null;
   setRoom: (room: Room) => void;
@@ -26,6 +29,8 @@ export const useGameStore = create<GameStateStore>((set, get) => ({
   room: null,
   gameState: null,
   mySnakeId: null,
+  myPreviousScore: 0,
+  myWasAlive: true,
   connected: false,
   error: null,
 
@@ -87,20 +92,46 @@ export const useGameStore = create<GameStateStore>((set, get) => ({
 
   connect: async (roomID: string, playerID: string, playerName: string) => {
     console.log('正在加入房间:', roomID, playerID, playerName);
+    soundManager.initialize();
 
     try {
       gameAPI.onGameState((message) => {
         console.log('收到游戏状态:', message);
         const data = message.data;
         if (data) {
+          const prevState = get();
           set({ room: data, gameState: data.game_state });
 
           if (data.players) {
             const mySnake = data.players.find((p: Snake) => p.player_id === playerID);
             if (mySnake) {
-              set({ mySnakeId: mySnake.id });
+              if (!prevState.mySnakeId) {
+                set({ mySnakeId: mySnake.id, myPreviousScore: mySnake.score || 0, myWasAlive: mySnake.alive });
+              }
+
+              if (prevState.mySnakeId) {
+                const myPreviousScore = prevState.myPreviousScore;
+                const myWasAlive = prevState.myWasAlive;
+
+                if (mySnake.score !== undefined && mySnake.score > myPreviousScore) {
+                  soundManager.play('eat_normal');
+                  set({ myPreviousScore: mySnake.score });
+                }
+
+                if (mySnake.alive !== undefined && myWasAlive && !mySnake.alive) {
+                  soundManager.play('game_over');
+                  set({ myWasAlive: false });
+                } else if (mySnake.alive !== undefined && !myWasAlive && mySnake.alive) {
+                  set({ myWasAlive: true });
+                }
+              }
+
               console.log('已识别当前玩家的蛇:', mySnake);
             }
+          }
+
+          if (data.game_state === 'PLAYING' && prevState.gameState !== 'PLAYING') {
+            soundManager.play('game_start');
           }
         }
       });
@@ -139,6 +170,8 @@ export const useGameStore = create<GameStateStore>((set, get) => ({
       room: null,
       gameState: null,
       mySnakeId: null,
+      myPreviousScore: 0,
+      myWasAlive: true,
       error: null,
     });
   },

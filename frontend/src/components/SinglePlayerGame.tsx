@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { GameBoard } from './Game/GameBoard';
+import { ThreeJSGameBoard } from './Game/ThreeJSGameBoard';
 import { SinglePlayerScoreBoard } from './Common/SinglePlayerScoreBoard';
 import { SinglePlayerControlPanel } from './Common/SinglePlayerControlPanel';
+import { ViewSwitcher } from './Common/ViewSwitcher';
+import type { ViewMode } from './Game/CameraController';
 import { Food, Room, Snake } from '../types/game';
+import { soundManager } from '../services/soundManager';
 
 export type SinglePlayerGameState = 'idle' | 'playing' | 'paused' | 'gameOver';
 export type SinglePlayerDirection = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
@@ -57,6 +60,7 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
     pos: { x: 15, y: 10 },
     type: 'NORMAL',
   });
+  const [viewMode, setViewMode] = useState<ViewMode>('isometric');
 
   const gameLoopRef = useRef<number | null>(null);
   const directionRef = useRef<SinglePlayerDirection>('RIGHT');
@@ -95,11 +99,13 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
       }
 
       if (head.x < 0 || head.x >= width || head.y < 0 || head.y >= height) {
+        soundManager.play('game_over');
         setGameState('gameOver');
         return prevSnake;
       }
 
       if (prevSnake.body.some((segment) => segment.x === head.x && segment.y === head.y)) {
+        soundManager.play('game_over');
         setGameState('gameOver');
         return prevSnake;
       }
@@ -112,6 +118,7 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
       };
 
       if (head.x === food.pos.x && head.y === food.pos.y) {
+        soundManager.play(food.type === 'SPECIAL' ? 'eat_special' : 'eat_normal');
         setScore((prevScore) => {
           const scoreDelta = food.type === 'SPECIAL' ? 5 : 1;
           const nextScore = prevScore + scoreDelta;
@@ -141,6 +148,7 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
       pos: { x: 15, y: 10 },
       type: 'NORMAL',
     });
+    soundManager.play('game_start');
   }, []);
 
   const pauseGame = useCallback(() => {
@@ -232,6 +240,10 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   }, []);
 
   useEffect(() => {
+    soundManager.initialize();
+  }, []);
+
+  useEffect(() => {
     localStorage.setItem('snakeHighScore', highScore.toString());
   }, [highScore]);
 
@@ -249,7 +261,11 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
         </div>
 
         <div className="mb-4 flex justify-center">
-          <GameBoard room={room} cellSize={cellSize} />
+          <ThreeJSGameBoard room={room} cellSize={cellSize} viewMode={viewMode} fixedWidth={800} fixedHeight={800} />
+        </div>
+
+        <div className="mb-4 flex justify-center">
+          <ViewSwitcher viewMode={viewMode} onViewModeChange={setViewMode} />
         </div>
 
         <SinglePlayerControlPanel

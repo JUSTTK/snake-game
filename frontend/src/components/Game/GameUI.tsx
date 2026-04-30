@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useGameStore } from '../../store/gameStore';
 import { useKeyPress } from '../../hooks/useKeyPress';
 import { ScoreBoard } from '../Common/ScoreBoard';
 import { ControlPanel } from '../Common/ControlPanel';
-import { GameBoard } from './GameBoard';
+import { ThreeJSGameBoard } from './ThreeJSGameBoard';
+import { ViewSwitcher } from '../Common/ViewSwitcher';
+import { ViewMode } from './CameraController';
 
 const getStateLabel = (state: string) => {
   switch (state) {
@@ -22,6 +24,10 @@ const getStateLabel = (state: string) => {
 
 export const GameUI: React.FC = () => {
   const { room, mySnakeId, connected, error } = useGameStore();
+  const [viewMode, setViewMode] = useState<ViewMode>('isometric');
+
+  // 使用更大的格子尺寸，让蛇身更清楚
+  const cellSize = room ? 40 : 40;
   useKeyPress();
 
   if (!room) {
@@ -108,8 +114,11 @@ export const GameUI: React.FC = () => {
 
           <div className="lg:col-span-2">
             <div className="rounded-lg bg-gray-800 p-6 shadow-lg">
+              <div className="mb-4 flex justify-center">
+                <ViewSwitcher viewMode={viewMode} onViewModeChange={setViewMode} />
+              </div>
               <div className="flex justify-center">
-                <GameBoard room={room} />
+                <ThreeJSGameBoard room={room} viewMode={viewMode} cellSize={cellSize} fixedWidth={800} fixedHeight={800} />
               </div>
             </div>
           </div>
