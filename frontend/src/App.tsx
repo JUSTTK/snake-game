@@ -1,36 +1,53 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
-import { SinglePlayerGame } from './components/SinglePlayerGame';
-import { GameUI } from './components/Game/GameUI';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useGameStore } from './store/gameStore';
+
+const SinglePlayerGame = lazy(() =>
+  import('./components/SinglePlayerGame').then((module) => ({
+    default: module.SinglePlayerGame,
+  }))
+);
+
+const GameUI = lazy(() =>
+  import('./components/Game/GameUI').then((module) => ({
+    default: module.GameUI,
+  }))
+);
+
+const RouteLoading = () => (
+  <div className="flex min-h-screen items-center justify-center bg-slate-950">
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-6 py-4 text-sm text-slate-300 shadow-xl shadow-slate-950/30">
+      正在加载游戏场景...
+    </div>
+  </div>
+);
 
 const ModeSelectionPage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900">
-      <div className="w-full max-w-md rounded-lg bg-gray-800 p-8 shadow-xl">
-        <h1 className="mb-8 text-center text-3xl font-bold text-white">贪吃蛇游戏</h1>
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/85 p-8 shadow-2xl shadow-slate-950/30">
+        <h1 className="mb-3 text-center text-3xl font-bold text-white">贪吃蛇 3D</h1>
+        <p className="mb-8 text-center text-sm text-slate-400">
+          选择模式后进入三视角游戏界面。
+        </p>
 
         <div className="space-y-4">
           <button
             onClick={() => navigate('/single-player')}
-            className="w-full rounded-md bg-snake-green px-4 py-3 font-bold text-white transition-colors hover:bg-snake-dark"
+            className="w-full rounded-xl bg-snake-green px-4 py-3 font-bold text-white transition-colors hover:bg-snake-dark"
           >
             单机模式
           </button>
 
           <button
             onClick={() => navigate('/multiplayer')}
-            className="w-full rounded-md bg-snake-blue px-4 py-3 font-bold text-white transition-colors hover:bg-snake-blue-dark"
+            className="w-full rounded-xl bg-cyan-600 px-4 py-3 font-bold text-white transition-colors hover:bg-cyan-700"
           >
             多人模式
           </button>
-        </div>
-
-        <div className="mt-6 text-center text-sm text-gray-400">
-          <p>请选择游戏模式后开始游戏。</p>
         </div>
       </div>
     </div>
@@ -69,11 +86,10 @@ const MultiplayerLoginPage = () => {
   const displayError = localError || storeError;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900">
-      <div className="w-full max-w-md rounded-lg bg-gray-800 p-8 shadow-xl">
-        <h1 className="mb-8 text-center text-3xl font-bold text-white">
-          贪吃蛇游戏 - 多人模式
-        </h1>
+    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/85 p-8 shadow-2xl shadow-slate-950/30">
+        <h1 className="mb-2 text-center text-3xl font-bold text-white">贪吃蛇 3D</h1>
+        <p className="mb-8 text-center text-sm text-slate-400">多人联机大厅</p>
 
         <div className="mb-6">
           <div className="mb-3 flex items-center justify-center gap-2">
@@ -82,7 +98,7 @@ const MultiplayerLoginPage = () => {
                 connected ? 'bg-green-500' : 'bg-red-500'
               }`}
             />
-            <span className="text-sm text-gray-400">
+            <span className="text-sm text-slate-400">
               {connected ? '已连接到服务器' : '尚未连接到服务器'}
             </span>
           </div>
@@ -111,34 +127,34 @@ const MultiplayerLoginPage = () => {
 
         <div className="space-y-4">
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">房间 ID</label>
+            <label className="mb-2 block text-sm font-medium text-slate-300">房间 ID</label>
             <input
               type="text"
               value={roomID}
               onChange={(e) => setRoomID(e.target.value)}
-              className="w-full rounded-md bg-gray-700 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+              className="w-full rounded-xl bg-slate-800 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
               placeholder="请输入房间 ID"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">玩家 ID</label>
+            <label className="mb-2 block text-sm font-medium text-slate-300">玩家 ID</label>
             <input
               type="text"
               value={playerID}
               onChange={(e) => setPlayerID(e.target.value)}
-              className="w-full rounded-md bg-gray-700 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+              className="w-full rounded-xl bg-slate-800 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
               placeholder="请输入玩家 ID"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-300">玩家昵称</label>
+            <label className="mb-2 block text-sm font-medium text-slate-300">玩家昵称</label>
             <input
               type="text"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
-              className="w-full rounded-md bg-gray-700 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+              className="w-full rounded-xl bg-slate-800 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
               placeholder="请输入玩家昵称"
             />
           </div>
@@ -146,7 +162,7 @@ const MultiplayerLoginPage = () => {
           <button
             onClick={handleJoin}
             disabled={isLoading}
-            className="w-full rounded-md bg-indigo-600 px-4 py-3 font-bold text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+            className="w-full rounded-xl bg-cyan-600 px-4 py-3 font-bold text-white transition-colors hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
@@ -186,7 +202,7 @@ const MultiplayerLoginPage = () => {
               setPlayerName('玩家1');
               setLocalError(null);
             }}
-            className="text-sm text-indigo-400 underline hover:text-indigo-300"
+            className="text-sm text-cyan-400 underline hover:text-cyan-300"
           >
             使用测试数据
           </button>
@@ -200,20 +216,22 @@ export function App() {
   return (
     <ErrorBoundary>
       <Router>
-        <Routes>
-          <Route path="/" element={<ModeSelectionPage />} />
-          <Route path="/single-player" element={<SinglePlayerGame />} />
-          <Route path="/multiplayer" element={<MultiplayerLoginPage />} />
-          <Route path="/game" element={<GameUI />} />
-          <Route
-            path="*"
-            element={
-              <div className="flex min-h-screen items-center justify-center bg-gray-900">
-                <div className="text-white">404 - 页面未找到</div>
-              </div>
-            }
-          />
-        </Routes>
+        <Suspense fallback={<RouteLoading />}>
+          <Routes>
+            <Route path="/" element={<ModeSelectionPage />} />
+            <Route path="/single-player" element={<SinglePlayerGame />} />
+            <Route path="/multiplayer" element={<MultiplayerLoginPage />} />
+            <Route path="/game" element={<GameUI />} />
+            <Route
+              path="*"
+              element={
+                <div className="flex min-h-screen items-center justify-center bg-slate-950">
+                  <div className="text-white">404 - 页面未找到</div>
+                </div>
+              }
+            />
+          </Routes>
+        </Suspense>
       </Router>
     </ErrorBoundary>
   );

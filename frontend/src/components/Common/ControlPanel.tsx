@@ -1,6 +1,6 @@
 import React from 'react';
-import { Button } from './Button';
 import { useGameStore } from '../../store/gameStore';
+import { Button } from './Button';
 
 interface ControlPanelProps {
   roomID: string;
@@ -13,7 +13,7 @@ const getGameStateLabel = (gameState: string | null) => {
     case 'WAITING':
       return '等待开始';
     case 'PLAYING':
-      return '游戏进行中';
+      return '进行中';
     case 'PAUSED':
       return '已暂停';
     case 'FINISHED':
@@ -62,7 +62,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
       {!connected ? (
         <Button onClick={handleJoin} size="lg" className="w-full">
-          加入游戏
+          加入对局
         </Button>
       ) : (
         <div className="flex flex-col space-y-3">
@@ -74,20 +74,20 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
           {gameState === 'WAITING' && (
             <Button onClick={startGame} size="md" className="w-full">
-              开始游戏
+              开始对局
             </Button>
           )}
 
           {gameState === 'PLAYING' && (
             <Button onClick={pauseGame} size="md" className="w-full">
-              暂停游戏
+              暂停对局
             </Button>
           )}
 
           {gameState === 'PAUSED' && (
             <>
               <Button onClick={resumeGame} size="md" className="w-full">
-                继续游戏
+                继续对局
               </Button>
               <Button onClick={restartGame} size="md" className="w-full" variant="primary">
                 重新开始
@@ -97,7 +97,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
 
           {gameState === 'FINISHED' && (
             <Button onClick={restartGame} size="md" className="w-full" variant="primary">
-              重新开始
+              再来一局
             </Button>
           )}
 
@@ -108,10 +108,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       )}
 
       <div className="mt-4 text-sm text-gray-400">
-        <p>操作说明：</p>
-        <p>方向键或 WASD 控制移动方向</p>
-        <p>开始后蛇会自动前进</p>
-        <p>空格键可暂停或继续游戏</p>
+        <p>操作说明</p>
+        <p>方向键或 WASD 改变移动方向</p>
+        <p>游戏开始后会自动前进</p>
+        <p>空格键暂停或继续</p>
       </div>
     </div>
   );

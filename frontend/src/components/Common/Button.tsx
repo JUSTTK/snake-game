@@ -15,13 +15,14 @@ export const Button: React.FC<ButtonProps> = ({
   disabled = false,
   variant = 'primary',
   size = 'md',
+  className = '',
 }) => {
-  const baseClasses = 'font-medium rounded-md transition-colors duration-200';
+  const baseClasses = 'rounded-md font-medium transition-colors duration-200';
 
   const variantClasses = {
-    primary: 'bg-snake-green hover:bg-snake-dark text-white',
-    secondary: 'bg-gray-600 hover:bg-gray-700 text-white',
-    danger: 'bg-red-600 hover:bg-red-700 text-white',
+    primary: 'bg-snake-green text-white hover:bg-snake-dark',
+    secondary: 'bg-gray-600 text-white hover:bg-gray-700',
+    danger: 'bg-red-600 text-white hover:bg-red-700',
   };
 
   const sizeClasses = {
@@ -35,8 +36,8 @@ export const Button: React.FC<ButtonProps> = ({
       onClick={onClick}
       disabled={disabled}
       className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${
-        disabled ? 'opacity-50 cursor-not-allowed' : ''
-      }`}
+        disabled ? 'cursor-not-allowed opacity-50' : ''
+      } ${className}`.trim()}
     >
       {children}
     </button>

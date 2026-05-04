@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ThreeJSGameBoard } from './Game/ThreeJSGameBoard';
-import { SinglePlayerScoreBoard } from './Common/SinglePlayerScoreBoard';
 import { SinglePlayerControlPanel } from './Common/SinglePlayerControlPanel';
-import { ViewSwitcher } from './Common/ViewSwitcher';
-import type { ViewMode } from './Game/CameraController';
-import { Food, Room, Snake } from '../types/game';
+import { SinglePlayerScoreBoard } from './Common/SinglePlayerScoreBoard';
+import { CameraModeSelector } from './Game/CameraModeSelector';
+import { CameraMode, ViewMode } from './Game/CameraController';
+import { MultiViewBoard } from './Game/MultiViewBoard';
 import { soundManager } from '../services/soundManager';
+import { Food, Room, Snake } from '../types/game';
+import { isReverseDirection, isTypingTarget, keyToDirection } from '../utils/direction';
 
 export type SinglePlayerGameState = 'idle' | 'playing' | 'paused' | 'gameOver';
 export type SinglePlayerDirection = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
@@ -50,7 +51,7 @@ const createBoardRoom = (
 export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   width = 20,
   height = 20,
-  cellSize = 20,
+  cellSize = 1.2,
 }) => {
   const [gameState, setGameState] = useState<SinglePlayerGameState>('idle');
   const [score, setScore] = useState(0);
@@ -61,29 +62,36 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
     type: 'NORMAL',
   });
   const [viewMode, setViewMode] = useState<ViewMode>('isometric');
+  const [cameraMode, setCameraMode] = useState<CameraMode>('comfort');
 
   const gameLoopRef = useRef<number | null>(null);
   const directionRef = useRef<SinglePlayerDirection>('RIGHT');
+  const queuedDirectionRef = useRef<SinglePlayerDirection>('RIGHT');
 
-  const generateFood = useCallback((): Point => {
-    let nextFood: Point;
-    do {
-      nextFood = {
-        x: Math.floor(Math.random() * width),
-        y: Math.floor(Math.random() * height),
-      };
-    } while (
-      snake.body.some((segment) => segment.x === nextFood.x && segment.y === nextFood.y)
-    );
+  const generateFood = useCallback(
+    (occupiedBody: Point[]): Point => {
+      let nextFood: Point;
+      do {
+        nextFood = {
+          x: Math.floor(Math.random() * width),
+          y: Math.floor(Math.random() * height),
+        };
+      } while (
+        occupiedBody.some((segment) => segment.x === nextFood.x && segment.y === nextFood.y)
+      );
 
-    return nextFood;
-  }, [height, snake.body, width]);
+      return nextFood;
+    },
+    [height, width]
+  );
 
   const moveSnake = useCallback(() => {
     setSnake((prevSnake) => {
+      const activeDirection = queuedDirectionRef.current;
+      directionRef.current = activeDirection;
       const head = { ...prevSnake.body[0] };
 
-      switch (directionRef.current) {
+      switch (activeDirection) {
         case 'UP':
           head.y -= 1;
           break;
@@ -98,13 +106,16 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
           break;
       }
 
+      const willGrow = head.x === food.pos.x && head.y === food.pos.y;
+      const collisionSegments = willGrow ? prevSnake.body : prevSnake.body.slice(0, -1);
+
       if (head.x < 0 || head.x >= width || head.y < 0 || head.y >= height) {
         soundManager.play('game_over');
         setGameState('gameOver');
         return prevSnake;
       }
 
-      if (prevSnake.body.some((segment) => segment.x === head.x && segment.y === head.y)) {
+      if (collisionSegments.some((segment) => segment.x === head.x && segment.y === head.y)) {
         soundManager.play('game_over');
         setGameState('gameOver');
         return prevSnake;
@@ -113,11 +124,11 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
       const nextBody = [head, ...prevSnake.body];
       const nextSnake: Snake = {
         ...prevSnake,
-        direction: directionRef.current,
+        direction: activeDirection,
         body: nextBody,
       };
 
-      if (head.x === food.pos.x && head.y === food.pos.y) {
+      if (willGrow) {
         soundManager.play(food.type === 'SPECIAL' ? 'eat_special' : 'eat_normal');
         setScore((prevScore) => {
           const scoreDelta = food.type === 'SPECIAL' ? 5 : 1;
@@ -127,10 +138,11 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
         });
 
         setFood({
-          pos: generateFood(),
+          pos: generateFood(nextBody),
           type: Math.random() > 0.8 ? 'SPECIAL' : 'NORMAL',
         });
       } else {
+        soundManager.playMoveTick();
         nextSnake.body.pop();
       }
 
@@ -144,6 +156,7 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
     setScore(0);
     setSnake(initialSnake);
     directionRef.current = 'RIGHT';
+    queuedDirectionRef.current = 'RIGHT';
     setFood({
       pos: { x: 15, y: 10 },
       type: 'NORMAL',
@@ -169,50 +182,41 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
 
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      switch (event.key) {
-        case 'ArrowUp':
-        case 'w':
-        case 'W':
-          if (gameState === 'playing' && directionRef.current !== 'DOWN') {
-            event.preventDefault();
-            directionRef.current = 'UP';
-          }
-          break;
-        case 'ArrowDown':
-        case 's':
-        case 'S':
-          if (gameState === 'playing' && directionRef.current !== 'UP') {
-            event.preventDefault();
-            directionRef.current = 'DOWN';
-          }
-          break;
-        case 'ArrowLeft':
-        case 'a':
-        case 'A':
-          if (gameState === 'playing' && directionRef.current !== 'RIGHT') {
-            event.preventDefault();
-            directionRef.current = 'LEFT';
-          }
-          break;
-        case 'ArrowRight':
-        case 'd':
-        case 'D':
-          if (gameState === 'playing' && directionRef.current !== 'LEFT') {
-            event.preventDefault();
-            directionRef.current = 'RIGHT';
-          }
-          break;
-        case ' ':
-        case 'Spacebar':
-          event.preventDefault();
-          if (!event.repeat) {
-            pauseGame();
-          }
-          break;
+      if (isTypingTarget(event.target)) {
+        return;
+      }
+
+      const nextDirection = keyToDirection(event.key);
+      if (nextDirection) {
+        event.preventDefault();
+
+        if (gameState !== 'playing' || event.repeat) {
+          return;
+        }
+
+        const currentDirection = directionRef.current;
+        const queuedDirection = queuedDirectionRef.current;
+        if (
+          !isReverseDirection(currentDirection, nextDirection) &&
+          !isReverseDirection(queuedDirection, nextDirection)
+        ) {
+          queuedDirectionRef.current = nextDirection;
+          soundManager.playTurn();
+        }
+        return;
+      }
+
+      if (event.code !== 'Space') {
+        return;
+      }
+
+      event.preventDefault();
+      if (!event.repeat) {
+        pauseGame();
       }
     };
 
-    window.addEventListener('keydown', handleKeyPress);
+    window.addEventListener('keydown', handleKeyPress, { passive: false });
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [gameState, pauseGame]);
 
@@ -244,39 +248,54 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   }, []);
 
   useEffect(() => {
+    soundManager.setBackgroundMusicActive(gameState === 'playing');
+    return () => soundManager.setBackgroundMusicActive(false);
+  }, [gameState]);
+
+  useEffect(() => {
     localStorage.setItem('snakeHighScore', highScore.toString());
   }, [highScore]);
 
   const room = createBoardRoom(width, height, { ...snake, score }, food);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-900 p-4">
-      <div className="w-full max-w-4xl rounded-lg bg-gray-800 p-6 shadow-xl">
-        <h1 className="mb-6 text-center text-3xl font-bold text-white">
-          贪吃蛇游戏 - 单机模式
-        </h1>
+    <div className="min-h-screen bg-slate-950 px-4 py-4 text-white sm:px-6">
+      <div className="mx-auto flex w-full max-w-[1800px] flex-col gap-6">
+        <header className="rounded-3xl border border-slate-800 bg-slate-900/80 px-6 py-5 shadow-xl shadow-slate-950/30">
+          <h1 className="text-center text-3xl font-bold text-white sm:text-4xl">
+            贪吃蛇 3D 单机版
+          </h1>
+          <p className="mt-2 text-center text-sm text-slate-400 sm:text-base">
+            三个跟随视角加全地图总览，支持紧跟模式和舒适模式切换。
+          </p>
+        </header>
 
-        <div className="mb-4 flex justify-between">
-          <SinglePlayerScoreBoard score={score} highScore={highScore} />
-        </div>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+          <MultiViewBoard
+            room={room}
+            cellSize={cellSize}
+            selectedView={viewMode}
+            cameraMode={cameraMode}
+            onSelectView={setViewMode}
+            focusSnakeId={snake.id}
+          />
 
-        <div className="mb-4 flex justify-center">
-          <ThreeJSGameBoard room={room} cellSize={cellSize} viewMode={viewMode} fixedWidth={800} fixedHeight={800} />
-        </div>
-
-        <div className="mb-4 flex justify-center">
-          <ViewSwitcher viewMode={viewMode} onViewModeChange={setViewMode} />
-        </div>
-
-        <SinglePlayerControlPanel
-          gameState={gameState}
-          onStart={startGame}
-          onPause={pauseGame}
-          onRestart={restartGame}
-        />
-
-        <div className="mt-4 text-center text-sm text-gray-400">
-          <p>使用方向键或 WASD 控制移动，按空格键可以暂停或继续。</p>
+          <aside className="flex flex-col gap-5 rounded-3xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl shadow-slate-950/30">
+            <SinglePlayerScoreBoard score={score} highScore={highScore} />
+            <CameraModeSelector cameraMode={cameraMode} onChange={setCameraMode} />
+            <SinglePlayerControlPanel
+              gameState={gameState}
+              onStart={startGame}
+              onPause={pauseGame}
+              onRestart={restartGame}
+            />
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
+              <p className="font-semibold text-white">声音与视野</p>
+              <p className="mt-2">
+                移动、转向、吃食物、开局和失败都有音效，游戏进行中会播放背景音乐。
+              </p>
+            </div>
+          </aside>
         </div>
       </div>
     </div>

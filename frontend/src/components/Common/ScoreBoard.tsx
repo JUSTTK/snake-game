@@ -8,7 +8,7 @@ interface ScoreBoardProps {
 
 export const ScoreBoard: React.FC<ScoreBoardProps> = ({ players, mySnakeId }) => {
   return (
-    <div className="rounded-lg bg-gray-800 p-4 shadow-lg">
+    <div className="rounded-2xl bg-slate-950/60 p-4 shadow-lg">
       <h3 className="mb-3 text-lg font-bold text-white">排行榜</h3>
       <div className="space-y-2">
         {players
@@ -18,7 +18,7 @@ export const ScoreBoard: React.FC<ScoreBoardProps> = ({ players, mySnakeId }) =>
             <div
               key={player.id ?? `${player.player_id}-${index}`}
               className={`flex items-center justify-between rounded-md p-2 ${
-                player.id === mySnakeId ? 'bg-snake-green bg-opacity-20' : 'bg-gray-700'
+                player.id === mySnakeId ? 'bg-snake-green bg-opacity-20' : 'bg-slate-800'
               }`}
             >
               <div className="flex items-center space-x-2">
