@@ -1,221 +1,277 @@
-# 贪吃蛇游戏 🐍
+# 贪吃蛇 3D 🐍✨
 
-一条蛇，一块棋盘，两种节奏。
+> 经典玩法，全新视角。用 Three.js 打造的沉浸式贪吃蛇体验。
 
-这里既有适合一个人安静刷分的单机模式，也有需要多人同场博弈的房间模式。前端负责把每一次转向、每一步移动、每一口吃到食物的瞬间画出来；后端负责让多人对局真正“跑起来”。
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![React](https://img.shields.io/badge/React-18.2-61DAFB?logo=react)](https://reactjs.org/)
+[![Three.js](https://img.shields.io/badge/Three.js-0.160-000000?logo=three.js)](https://threejs.org/)
+[![Go](https://img.shields.io/badge/Go-1.21-00ADD8?logo=go)](https://golang.org/)
 
-## 🎮 这项目现在能玩什么
+---
+
+## 🎯 项目特色
+
+这不是你记忆中的那个 2D 网格贪吃蛇。在这里：
+
+- **真·3D 渲染**：使用 Three.js 构建完整的三维游戏世界
+- **三视角系统**：等轴视角、俯视图、透视跟随，一键切换
+- **智能相机跟随**：相机能预判你的前进方向，还会悄悄帮你找食物
+- **两种相机模式**：「舒适模式」给你开阔视野，「紧跟模式」提供沉浸体验
+- **多人实时对战**：通过 WebSocket 实现真正意义上的多人同场竞技
+- **复古 8-bit 音效**：游戏开始、吃食物、转向、失败，每个动作都有声音
+- **动态背景音乐**：游戏进行中自动播放轻快的背景旋律
+- **发光食物系统**：普通食物是粉红苹果，特殊食物会旋转发光，吃了加分更多
+
+## 🎮 游戏玩法
 
 ### 单机模式 🧍
 
-适合想立刻开一局的人。
+一个人，一条蛇，与自己的速度竞赛。
 
-- 打开页面就能开始
-- 游戏逻辑运行在前端本地
-- 方向键或 `WASD` 控制方向
-- 空格键暂停或继续
-- 撞墙或撞到自己后结束
-- 页面会记录当前分数和最高分
+**操作方式：**
+- `↑` `↓` `←` `→` 或 `W` `A` `S` `D` — 改变蛇的移动方向
+- `空格键` — 暂停/继续游戏
+
+**游戏规则：**
+- 吃到食物（粉红苹果）得 1 分，蛇身变长
+- 吃到特殊食物（旋转发光的金色八面体）得 5 分
+- 撞墙或撞到自己 — 游戏结束
+- 游戏会记录你的当前分数和最高分
 
 ### 多人模式 👥
 
-适合两个人以上一起进房间抢节奏。
+和朋友们同一个房间里一决高下。
 
-- 玩家通过 `roomID` 进入同一个房间
-- 后端统一维护蛇身、食物、房间状态和胜负判定
-- 点击“开始游戏”后，蛇会自动持续前进
-- 方向键或 `WASD` 改变方向
-- 空格键可以暂停或继续
-- 游戏结束后支持“重新开始”
+**玩法亮点：**
+- 所有玩家共享同一个房间、同一块地图
+- 蛇会自动持续前进，你只需要控制方向
+- 房间状态由后端统一管理，保证公平性
+- 支持任意数量玩家同时加入（理论上）
+- 游戏结束后可以一键重新开始
 
-## ✨ 为什么它和普通练手项目不太一样
+**怎么开始：**
+1. 确保 Go 后端服务已启动
+2. 多个浏览器窗口分别进入「多人模式」
+3. 使用相同的 `roomID` 进入同一个房间
+4. 每个玩家填写不同的 `playerID` 和 `playerName`
+5. 点击「开始游戏」
+6. 使用方向键控制，用空格键暂停
 
-- 不只是前端动画，而是带真实后端状态同步的多人模式
-- 多人模式的蛇不是“按一下走一下”，而是开始后自动持续运动
-- 支持开始、暂停、继续、重新开始、离开房间这些完整流程
-- 前端和后端职责分明，适合拿来做联调、练 WebSocket、练状态管理
+## 🗂️ 项目结构
 
-## 🧰 技术栈
-
-### 后端
-
-- Go 1.21
-- Gin
-- `golang.org/x/net/websocket`
-
-### 前端
-
-- React 18
-- TypeScript
-- Vite
-- Tailwind CSS
-- Zustand
-
-### 部署相关
-
-- Docker
-- Nginx
-- Docker Compose
-
-## 🗂️ 目录结构
-
-```text
+```
 snake-game/
-|-- backend/
-|   |-- cmd/server/
-|   |-- internal/
-|   |   |-- config/
-|   |   |-- handlers/
-|   |   |-- models/
-|   |   `-- services/
-|   |-- Dockerfile
-|   `-- go.mod
-|-- frontend/
-|   |-- src/
-|   |   |-- components/
-|   |   |-- hooks/
-|   |   |-- services/
-|   |   |-- store/
-|   |   `-- types/
-|   |-- Dockerfile
-|   |-- nginx.conf
-|   `-- package.json
-|-- docker-compose.yml
-|-- README.md
-|-- STARTUP_GUIDE.md
-`-- TEST_GUIDE.md
+├── backend/                    # Go 后端服务
+│   ├── cmd/server/            # 服务入口
+│   │   └── main.go            # 主程序
+│   ├── internal/              # 内部业务逻辑
+│   │   ├── config/            # 配置管理
+│   │   ├── handlers/         # HTTP 处理器
+│   │   ├── models/            # 数据模型
+│   │   └── services/         # 业务服务（含 WebSocket）
+│   ├── go.mod                # Go 依赖管理
+│   └── Dockerfile            # Docker 镜像构建
+│
+├── frontend/                  # React 前端应用
+│   ├── src/
+│   │   ├── components/        # React 组件
+│   │   │   ├── Common/       # 通用组件
+│   │   │   │   ├── Button.tsx
+│   │   │   │   ├── ControlPanel.tsx
+│   │   │   │   ├── ScoreBoard.tsx
+│   │   │   │   └── ViewSwitcher.tsx
+│   │   │   ├── Game/         # 游戏核心组件
+│   │   │   │   ├── CameraController.tsx    # 智能相机控制器
+│   │   │   │   ├── CameraModeSelector.tsx  # 相机模式切换
+│   │   │   │   ├── GameUI.tsx             # 多人游戏主界面
+│   │   │   │   ├── MultiViewBoard.tsx     # 多视图棋盘
+│   │   │   │   ├── ThreeJSFloor.tsx       # 3D 地面
+│   │   │   │   ├── ThreeJSFood.tsx        # 3D 食物
+│   │   │   │   ├── ThreeJSGameBoard.tsx   # 3D 游戏棋盘
+│   │   │   │   └── ThreeJSSnake.tsx       # 3D 蛇
+│   │   │   ├── ErrorBoundary.tsx
+│   │   │   └── SinglePlayerGame.tsx       # 单机游戏
+│   │   ├── hooks/             # React 自定义 Hooks
+│   │   ├── services/          # 服务层
+│   │   │   ├── api.ts        # HTTP & WebSocket API
+│   │   │   └── soundManager.ts  # 音效管理器
+│   │   ├── store/             # 状态管理
+│   │   ├── types/             # TypeScript 类型定义
+│   │   ├── utils/             # 工具函数
+│   │   ├── App.tsx            # 应用主入口
+│   │   └── main.tsx           # React 挂载点
+│   ├── public/                # 静态资源
+│   │   └── sounds/            # 8-bit 音效文件
+│   │       ├── eat_normal.wav
+│   │       ├── eat_special.wav
+│   │       ├── game_over.wav
+│   │       └── game_start.wav
+│   ├── package.json           # npm 依赖
+│   ├── vite.config.ts         # Vite 配置
+│   ├── tailwind.config.js     # Tailwind CSS 配置
+│   └── Dockerfile            # Docker 镜像构建
+│
+├── docker-compose.yml         # Docker Compose 编排
+├── README.md                  # 项目说明（本文档）
+├── STARTUP_GUIDE.md          # 详细启动指南
+└── TEST_GUIDE.md             # 测试指南
 ```
 
-## 🚀 三步跑起来
+## 🛠️ 技术栈
 
-### 1. 启动后端
+### 后端
+| 技术 | 用途 |
+|------|------|
+| Go 1.21 | 核心编程语言 |
+| Gin | HTTP Web 框架 |
+| `golang.org/x/net/websocket` | WebSocket 通信 |
+| Docker | 容器化部署 |
 
-在项目根目录执行：
+### 前端
+| 技术 | 用途 |
+|------|------|
+| React 18 | UI 框架 |
+| TypeScript | 类型安全 |
+| Vite | 构建工具 |
+| Three.js | 3D 渲染引擎 |
+| @react-three/fiber | React + Three.js 集成 |
+| @react-three/drei | Three.js 辅助组件库 |
+| Tailwind CSS | 样式框架 |
+| Zustand | 状态管理 |
+| React Router | 路由管理 |
 
-```bat
+## 🚀 快速开始
+
+### 方式一：本地开发（推荐）
+
+1. **启动后端**
+```bash
 cd backend
-set GOCACHE=d:\code\cc_test\.gocache
-set GOMODCACHE=d:\code\cc_test\.gomodcache
-set GOPROXY=https://goproxy.cn,direct
 go run ./cmd/server
 ```
 
-后端默认地址：
-
-```text
-http://localhost:8081
-```
-
-### 2. 启动前端
-
-另开一个终端执行：
-
-```bat
+2. **启动前端**
+```bash
 cd frontend
 npm install
 npm run dev -- --host
 ```
 
-前端默认地址：
+3. **打开浏览器**
+- 单机模式：直接开始玩
+- 多人模式：用相同 roomID 多开窗口一起玩
 
-```text
-http://localhost:5173
+### 方式二：Docker 部署
+
+```bash
+docker-compose up --build -d
 ```
 
-### 3. 打开浏览器开始玩
+访问：
+- 前端：http://localhost
+- 后端健康检查：http://localhost:8081/health
 
-- 单机模式：直接进入就能开始
-- 多人模式：两个窗口使用同一个 `roomID`，不同的 `playerID` 和 `playerName`
-
-## 🔌 多人模式怎么通信
+## 📡 API 接口
 
 ### HTTP 接口
 
-- `GET /api/rooms`
-- `POST /api/rooms`
-- `POST /api/rooms/:id/join`
-- `GET /health`
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/rooms` | 获取所有房间 |
+| POST | `/api/rooms` | 创建新房间 |
+| POST | `/api/rooms/:id/join` | 加入指定房间 |
+| GET | `/health` | 健康检查 |
 
-### WebSocket
+### WebSocket 连接
 
-连接格式：
-
-```text
+```
 ws://localhost:8081/ws?room_id=xxx&player_id=xxx&player_name=xxx
 ```
 
-客户端常用消息：
+### 消息类型
 
+**客户端 → 服务端：**
 ```json
-{ "type": "MOVE", "data": "UP" }
-{ "type": "START_GAME" }
-{ "type": "PAUSE" }
-{ "type": "RESUME" }
-{ "type": "RESTART_GAME" }
-{ "type": "LEAVE" }
+{ "type": "MOVE", "data": "UP" }      // 改变方向
+{ "type": "START_GAME" }               // 开始游戏
+{ "type": "PAUSE" }                    // 暂停
+{ "type": "RESUME" }                   // 继续
+{ "type": "RESTART_GAME" }             // 重新开始
+{ "type": "LEAVE" }                    // 离开房间
 ```
 
-服务端会持续广播最新 `GAME_STATE`，前端根据它刷新棋盘、玩家状态和按钮状态。
-
-## 🖥️ Windows 下现成可用的脚本
-
-- `start-dev.bat`：同时启动前后端开发环境
-- `run-server.bat`：编译并启动后端
-- `run-frontend.bat`：启动前端开发服务器
-- `start-prod.bat`：执行 `docker-compose up --build -d`
-
-## 👍 当前最推荐的使用方式
-
-如果你是来开发、联调或者验收功能，最推荐直接使用本地启动：
-
-- 后端：`go run ./cmd/server`
-- 前端：`npm run dev -- --host`
-
-原因很简单：
-
-- 日志最清楚
-- 问题最好定位
-- 当前多人模式默认就是连 `localhost:8081`
-
-## 🐳 Docker 现在能不能直接用
-
-可以用，但需要带着“已知风险”去用。
-
-当前仓库里存在一处历史配置差异：
-
-- `docker-compose.yml` 中后端映射的是 `8081:8081`
-- `frontend/nginx.conf` 里 `/api` 和 `/ws` 代理目标仍写成 `backend:8080`
-
-这意味着本地开发模式最稳，而 Docker 跑通前最好先确认代理端口是否要改成 `8081`。
-
-## ✅ 快速自检
-
-后端健康检查：
-
-```text
-http://localhost:8081/health
+**服务端 → 客户端：**
+```json
+{ "type": "GAME_STATE", "data": {...} }  // 游戏状态更新
 ```
 
-前端构建验证：
+## 🎨 游戏视觉亮点
 
-```bash
-cd frontend
-npm run build
-```
+### 3D 蛇
+- 蛇头有会转动的小眼睛
+- 身体从蛇头到尾部逐渐变细
+- 使用 `RoundedBox` 实现圆角方块
+- 蛇头带有微弱的发光效果
 
-如果你想快速验证多人模式，最简单的方法是：
+### 食物系统
+- **普通食物**：粉红球体 + 绿色小叶子，轻微浮动
+- **特殊食物**：金色八面体，旋转发光，点光源照亮周围
+- 两种食物都有自发光材质
 
-1. 启动后端
-2. 启动前端
-3. 打开两个浏览器窗口
-4. 输入相同的 `roomID`
-5. 点击开始游戏
-6. 测试自动移动、方向切换、空格暂停和重新开始
+### 光照与阴影
+- 动态方向光跟随相机移动
+- 双色调光照（主光 + 青色补光）
+- 环境光与半球光配合
+- 所有物体都投射和接收阴影
 
-## 📚 相关文档
+### 智能相机
+- 预判蛇的移动方向，相机提前转向
+- 自动计算与最近食物的距离，相机视角微妙向食物倾斜
+- 根据蛇身长度动态调整视野范围
+- 平滑阻尼，镜头移动如丝般顺滑
 
-- [启动指南](./STARTUP_GUIDE.md)
-- [测试指南](./TEST_GUIDE.md)
-- [设计文档](../贪吃蛇游戏设计文档_Go版.md)
+## 🔊 音效系统
 
-如果你是第一次接手这个项目，建议先看 `README` 了解全貌，再看 `STARTUP_GUIDE.md` 按步骤启动，最后用 `TEST_GUIDE.md` 做功能回归。
+所有音效采用 8-bit 复古风格，使用 Python + NumPy 生成：
+
+| 音效 | 文件 | 触发条件 |
+|------|------|----------|
+| 开始游戏 | `game_start.wav` | 点击开始按钮 |
+| 普通食物 | `eat_normal.wav` | 吃到粉红苹果 |
+| 特殊食物 | `eat_special.wav` | 吃到金色食物 |
+| 游戏结束 | `game_over.wav` | 撞墙或自撞 |
+
+**背景音乐：**
+- 使用 Web Audio API 实时合成
+- 轻快的 8-bit 循环旋律
+- 游戏暂停时自动停止
+- 游戏进行中持续播放
+
+## 📊 相机模式详解
+
+### 视角类型
+
+| 视角 | 特点 |
+|------|------|
+| **俯视图** | 完全垂直向下，适合全局规划 |
+| **等轴视角** | 经典游戏视角，平衡全局与细节 |
+| **透视跟随** | 低角度沉浸视角，有立体纵深感 |
+
+### 相机模式
+
+| 模式 | 特点 |
+|------|------|
+| **舒适模式** | 视野开阔，适合初学者 |
+| **紧跟模式** | 视野较紧，沉浸感更强 |
+
+## 🤝 贡献指南
+
+欢迎提交 Issue 和 Pull Request！
+
+## 📄 许可证
+
+MIT License
+
+---
+
+**开始你的 3D 贪吃蛇冒险吧！** 🐍🎮✨
