@@ -13,7 +13,7 @@ import { SpatialAudio, AmbientAudio3D } from './Audio3D';
 
 export type CameraTargetMode = 'follow' | 'overview';
 
-interface ThreeJSGameBoardProps {
+interface ThreeJSGameBoardEnhancedProps {
   room: Room;
   cellSize?: number;
   viewMode?: 'top' | 'isometric' | 'perspective';
@@ -21,6 +21,7 @@ interface ThreeJSGameBoardProps {
   allowOrbitControls?: boolean;
   focusSnakeId?: string;
   cameraTargetMode?: CameraTargetMode;
+  onParticleEffect?: (type: string, position: [number, number, number]) => void;
 }
 
 const DIRECTION_VECTORS: Record<Direction, { x: number; z: number }> = {
@@ -131,7 +132,7 @@ const getCameraFocusState = (
   };
 };
 
-export const ThreeJSGameBoard: React.FC<ThreeJSGameBoardProps> = ({
+export const ThreeJSGameBoardEnhanced: React.FC<ThreeJSGameBoardEnhancedProps> = ({
   room,
   cellSize = 1,
   viewMode = 'isometric',
@@ -140,21 +141,76 @@ export const ThreeJSGameBoard: React.FC<ThreeJSGameBoardProps> = ({
   focusSnakeId,
   cameraTargetMode = 'follow',
 }) => {
+  const [activeParticles, setActiveParticles] = useState<{type: string, position: [number, number, number], id: string}[]>([]);
+  
   const width = room.map_size.x;
   const height = room.map_size.y;
   const boardSpan = Math.max(width, height) * cellSize;
-  const [activeParticles, setActiveParticles] = useState<{type: string, position: [number, number, number], id: string}[]>([]);
 
   const { focusPoint, visibleSpan } = useMemo(
     () => getCameraFocusState(room, cellSize, cameraMode, cameraTargetMode, focusSnakeId),
     [cameraMode, cameraTargetMode, cellSize, focusSnakeId, room]
   );
 
-  // 处理食物被吃掉的事件
-  // const handleFoodEaten = useCallback((food: any, snake: Snake) => {
-  //   // TODO: 实现食物被吃掉的处理逻辑
-  //   console.log('Food eaten:', food, snake);
-  // }, [cellSize]);
+  // 检测食物被吃掉的事件
+  // const checkFoodEaten = useCallback(() => {
+  //   const previousFoods = new Set(room.foods?.map(food => `${food.pos.x}-${food.pos.y}`) || []);
+  //   
+  //   // 这里应该在游戏逻辑中调用，而不是在这里检测
+  //   // 为了演示，我们假设有一个机制来触发粒子效果
+  // }, [room.foods]);
+
+  // // 处理蛇的方向变化
+  // const handleSnakeTurn = useCallback((snakeId: string, newDirection: Direction) => {
+  //   // setSnakeEffects(prev => {
+  //   //   const existing = prev.find(effect => effect.snakeId === snakeId);
+  //   //   if (existing && existing.lastDirection !== newDirection) {
+  //   //     // 找到对应的蛇，创建转向粒子效果
+  //   //     const snake = room.players?.find(s => s.id === snakeId);
+  //   //     if (snake && snake.body.length > 0) {
+  //   //       const head = snake.body[0];
+  //   //       const position: [number, number, number] = [
+  //   //         head.x * cellSize + cellSize / 2,
+  //   //         cellSize / 2,
+  //   //         head.y * cellSize + cellSize / 2
+  //   //       ];
+  //   //       
+  //   //       const particleId = `turn-${snakeId}-${Date.now()}`;
+  //   //       setActiveParticles(prev => [...prev, { type: 'turn', position, id: particleId }]);
+  //   //       
+  //   //       setTimeout(() => {
+  //   //         setActiveParticles(prev => prev.filter(p => p.id !== particleId));
+  //   //       }, 1000);
+  //   //     }
+  //   //   }
+  //   //   
+  //   //   return prev.map(effect => 
+  //   //     effect.snakeId === snakeId 
+  //   //       ? { ...effect, lastDirection: newDirection } 
+  //   //       : effect
+  //   //   );
+  //   // });
+  // }, [room.players, cellSize]);
+
+  // // 处理蛇死亡事件
+  // const handleSnakeDeath = useCallback((snakeId: string) => {
+  //   const snake = room.players?.find(s => s.id === snakeId);
+  //   if (snake && snake.body.length > 0) {
+  //     const head = snake.body[0];
+  //     const position: [number, number, number] = [
+  //       head.x * cellSize + cellSize / 2,
+  //       cellSize / 2,
+  //       head.y * cellSize + cellSize / 2
+  //     ];
+  //     
+  //     const particleId = `death-${snakeId}-${Date.now()}`;
+  //     setActiveParticles(prev => [...prev, { type: 'death', position, id: particleId }]);
+  //     
+  //     setTimeout(() => {
+  //       setActiveParticles(prev => prev.filter(p => p.id !== particleId));
+  //     }, 2000);
+  //   }
+  // }, [room.players, cellSize]);
 
   return (
     <div className="h-full w-full overflow-hidden bg-slate-950">
@@ -187,6 +243,7 @@ export const ThreeJSGameBoard: React.FC<ThreeJSGameBoardProps> = ({
 
         <ThreeJSFloor width={width} height={height} cellSize={cellSize} />
 
+        {/* 食物渲染 */}
         {room.foods?.map((food, index) => (
           <React.Fragment key={`food-${index}`}>
             <ThreeJSFood food={food} cellSize={cellSize} />
@@ -207,6 +264,7 @@ export const ThreeJSGameBoard: React.FC<ThreeJSGameBoardProps> = ({
           </React.Fragment>
         ))}
 
+        {/* 蛇的渲染 */}
         {room.players?.map((snake) => (
           <React.Fragment key={snake.id}>
             <ThreeJSSnake snake={snake} cellSize={cellSize} />
