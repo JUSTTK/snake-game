@@ -32,8 +32,8 @@ export const SinglePlayerControlPanel: React.FC<SinglePlayerControlPanelProps> =
   return (
     <div className="flex flex-col space-y-4">
       <div className="text-center">
-        <p className="text-white">
-          当前状态：<span className="font-bold">{getStatusText()}</span>
+        <p style={{ color: 'var(--text-secondary)' }}>
+          当前状态：<span className="font-bold" style={{ color: 'var(--accent-primary)' }}>{getStatusText()}</span>
         </p>
       </div>
 
@@ -63,7 +63,7 @@ export const SinglePlayerControlPanel: React.FC<SinglePlayerControlPanelProps> =
         )}
       </div>
 
-      <div className="mt-4 text-sm text-gray-400">
+      <div className="mt-4 text-sm" style={{ color: 'var(--text-muted)' }}>
         <p>操作说明</p>
         <p>方向键或 WASD 控制移动</p>
         <p>空格键暂停或继续</p>

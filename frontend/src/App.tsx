@@ -16,8 +16,8 @@ const GameUI = lazy(() =>
 );
 
 const RouteLoading = () => (
-  <div className="flex min-h-screen items-center justify-center bg-slate-950">
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/80 px-6 py-4 text-sm text-slate-300 shadow-xl shadow-slate-950/30">
+  <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)' }}>
+    <div className="rounded-2xl border px-6 py-4 text-sm shadow-xl" style={{ borderColor: 'var(--border-primary)', backgroundColor: 'var(--bg-card)', color: 'var(--text-secondary)', boxShadow: `0 10px 30px var(--shadow-color)` }}>
       正在加载游戏场景...
     </div>
   </div>
@@ -27,24 +27,26 @@ const ModeSelectionPage = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
-      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/85 p-8 shadow-2xl shadow-slate-950/30">
-        <h1 className="mb-3 text-center text-3xl font-bold text-white">贪吃蛇 3D</h1>
-        <p className="mb-8 text-center text-sm text-slate-400">
+    <div className="flex min-h-screen items-center justify-center px-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      <div className="w-full max-w-md rounded-3xl border p-8 shadow-2xl" style={{ borderColor: 'var(--border-primary)', backgroundColor: 'var(--bg-card)', boxShadow: `0 25px 50px var(--shadow-color)` }}>
+        <h1 className="mb-3 text-center text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>贪吃蛇 3D</h1>
+        <p className="mb-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
           选择模式后进入三视角游戏界面。
         </p>
 
         <div className="space-y-4">
           <button
             onClick={() => navigate('/single-player')}
-            className="w-full rounded-xl bg-snake-green px-4 py-3 font-bold text-white transition-colors hover:bg-snake-dark"
+            className="w-full rounded-xl px-4 py-3 font-bold transition-colors"
+            style={{ backgroundColor: 'var(--accent-primary)', color: 'var(--bg-primary)' }}
           >
             单机模式
           </button>
 
           <button
             onClick={() => navigate('/multiplayer')}
-            className="w-full rounded-xl bg-cyan-600 px-4 py-3 font-bold text-white transition-colors hover:bg-cyan-700"
+            className="w-full rounded-xl px-4 py-3 font-bold transition-colors"
+            style={{ backgroundColor: 'var(--accent-cyan)', color: '#ffffff' }}
           >
             多人模式
           </button>
@@ -86,28 +88,28 @@ const MultiplayerLoginPage = () => {
   const displayError = localError || storeError;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
-      <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900/85 p-8 shadow-2xl shadow-slate-950/30">
-        <h1 className="mb-2 text-center text-3xl font-bold text-white">贪吃蛇 3D</h1>
-        <p className="mb-8 text-center text-sm text-slate-400">多人联机大厅</p>
+    <div className="flex min-h-screen items-center justify-center px-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      <div className="w-full max-w-md rounded-3xl border p-8 shadow-2xl" style={{ borderColor: 'var(--border-primary)', backgroundColor: 'var(--bg-card)', boxShadow: `0 25px 50px var(--shadow-color)` }}>
+        <h1 className="mb-2 text-center text-3xl font-bold" style={{ color: 'var(--text-primary)' }}>贪吃蛇 3D</h1>
+        <p className="mb-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>多人联机大厅</p>
 
         <div className="mb-6">
           <div className="mb-3 flex items-center justify-center gap-2">
             <div
-              className={`h-3 w-3 rounded-full ${
-                connected ? 'bg-green-500' : 'bg-red-500'
-              }`}
+              className="h-3 w-3 rounded-full"
+              style={{ backgroundColor: connected ? 'var(--accent-primary)' : 'var(--accent-red)' }}
             />
-            <span className="text-sm text-slate-400">
+            <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
               {connected ? '已连接到服务器' : '尚未连接到服务器'}
             </span>
           </div>
 
           {displayError && (
-            <div className="rounded-md border border-red-800 bg-red-900/30 p-4">
+            <div className="rounded-md border p-4" style={{ borderColor: 'var(--accent-red)', backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
               <div className="flex items-start gap-3">
                 <svg
-                  className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-400"
+                  className="mt-0.5 h-5 w-5 flex-shrink-0"
+                  style={{ color: 'var(--accent-red)' }}
                   viewBox="0 0 20 20"
                   fill="currentColor"
                 >
@@ -118,7 +120,7 @@ const MultiplayerLoginPage = () => {
                   />
                 </svg>
                 <div className="flex-1">
-                  <p className="text-sm text-red-300">{displayError}</p>
+                  <p className="text-sm" style={{ color: 'var(--accent-red)' }}>{displayError}</p>
                 </div>
               </div>
             </div>
@@ -127,34 +129,37 @@ const MultiplayerLoginPage = () => {
 
         <div className="space-y-4">
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">房间 ID</label>
+            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>房间 ID</label>
             <input
               type="text"
               value={roomID}
               onChange={(e) => setRoomID(e.target.value)}
-              className="w-full rounded-xl bg-slate-800 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
+              className="w-full rounded-xl px-4 py-2 focus:outline-none focus:ring-2"
+              style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', borderColor: 'var(--border-primary)' }}
               placeholder="请输入房间 ID"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">玩家 ID</label>
+            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>玩家 ID</label>
             <input
               type="text"
               value={playerID}
               onChange={(e) => setPlayerID(e.target.value)}
-              className="w-full rounded-xl bg-slate-800 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
+              className="w-full rounded-xl px-4 py-2 focus:outline-none focus:ring-2"
+              style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', borderColor: 'var(--border-primary)' }}
               placeholder="请输入玩家 ID"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">玩家昵称</label>
+            <label className="mb-2 block text-sm font-medium" style={{ color: 'var(--text-secondary)' }}>玩家昵称</label>
             <input
               type="text"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
-              className="w-full rounded-xl bg-slate-800 px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
+              className="w-full rounded-xl px-4 py-2 focus:outline-none focus:ring-2"
+              style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', borderColor: 'var(--border-primary)' }}
               placeholder="请输入玩家昵称"
             />
           </div>
@@ -162,7 +167,8 @@ const MultiplayerLoginPage = () => {
           <button
             onClick={handleJoin}
             disabled={isLoading}
-            className="w-full rounded-xl bg-cyan-600 px-4 py-3 font-bold text-white transition-colors hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 focus:ring-offset-slate-950"
+            className="w-full rounded-xl px-4 py-3 font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2"
+            style={{ backgroundColor: 'var(--accent-cyan)', color: '#ffffff' }}
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
@@ -202,7 +208,8 @@ const MultiplayerLoginPage = () => {
               setPlayerName('玩家1');
               setLocalError(null);
             }}
-            className="text-sm text-cyan-400 underline hover:text-cyan-300"
+            className="text-sm underline"
+            style={{ color: 'var(--accent-cyan)' }}
           >
             使用测试数据
           </button>
@@ -225,8 +232,8 @@ export function App() {
             <Route
               path="*"
               element={
-                <div className="flex min-h-screen items-center justify-center bg-slate-950">
-                  <div className="text-white">404 - 页面未找到</div>
+                <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: 'var(--bg-primary)' }}>
+                  <div style={{ color: 'var(--text-primary)' }}>404 - 页面未找到</div>
                 </div>
               }
             />

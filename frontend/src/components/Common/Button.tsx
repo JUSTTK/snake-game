@@ -19,10 +19,10 @@ export const Button: React.FC<ButtonProps> = ({
 }) => {
   const baseClasses = 'rounded-md font-medium transition-colors duration-200';
 
-  const variantClasses = {
-    primary: 'bg-snake-green text-white hover:bg-snake-dark',
-    secondary: 'bg-gray-600 text-white hover:bg-gray-700',
-    danger: 'bg-red-600 text-white hover:bg-red-700',
+  const variantStyles: Record<string, React.CSSProperties> = {
+    primary: { backgroundColor: 'var(--accent-primary)', color: 'var(--bg-primary)' },
+    secondary: { backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-primary)' },
+    danger: { backgroundColor: 'var(--accent-red)', color: '#ffffff' },
   };
 
   const sizeClasses = {
@@ -35,9 +35,10 @@ export const Button: React.FC<ButtonProps> = ({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${
+      className={`${baseClasses} ${sizeClasses[size]} ${
         disabled ? 'cursor-not-allowed opacity-50' : ''
       } ${className}`.trim()}
+      style={variantStyles[variant]}
     >
       {children}
     </button>

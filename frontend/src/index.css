@@ -2,6 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
+:root,
+[data-theme="dark"] {
+  --bg-primary: #020617;
+  --bg-secondary: #0f172a;
+  --bg-card: #1e293b;
+  --bg-card-hover: #334155;
+  --bg-input: #1e293b;
+  --border-primary: #334155;
+  --border-accent: #475569;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-primary: #4ade80;
+  --accent-secondary: #22c55e;
+  --accent-hover: #166534;
+  --accent-cyan: #06b6d4;
+  --accent-red: #ef4444;
+  --accent-yellow: #fbbf24;
+  --accent-blue: #38bdf8;
+  --shadow-color: rgba(2, 6, 23, 0.3);
+  --glow-color: rgba(74, 222, 128, 0.15);
+  --canvas-bg: #020617;
+  --fog-color: #020617;
+  --floor-color: #0f172a;
+  --floor-grid: #1e293b;
+}
+
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-card-hover: #e2e8f0;
+  --bg-input: #f1f5f9;
+  --border-primary: #cbd5e1;
+  --border-accent: #94a3b8;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent-primary: #22c55e;
+  --accent-secondary: #16a34a;
+  --accent-hover: #15803d;
+  --accent-cyan: #0891b2;
+  --accent-red: #dc2626;
+  --accent-yellow: #d97706;
+  --accent-blue: #0284c7;
+  --shadow-color: rgba(0, 0, 0, 0.08);
+  --glow-color: rgba(34, 197, 94, 0.1);
+  --canvas-bg: #e2e8f0;
+  --fog-color: #e2e8f0;
+  --floor-color: #f1f5f9;
+  --floor-grid: #cbd5e1;
+}
+
+[data-theme="neon"] {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-card: #1a1a2e;
+  --bg-card-hover: #252545;
+  --bg-input: #1a1a2e;
+  --border-primary: #2a2a4a;
+  --border-accent: #3a3a6a;
+  --text-primary: #e0e0ff;
+  --text-secondary: #8888cc;
+  --text-muted: #555588;
+  --accent-primary: #00ff88;
+  --accent-secondary: #00cc6a;
+  --accent-hover: #009950;
+  --accent-cyan: #00ddff;
+  --accent-red: #ff3366;
+  --accent-yellow: #ffcc00;
+  --accent-blue: #4488ff;
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --glow-color: rgba(0, 255, 136, 0.2);
+  --canvas-bg: #0a0a0a;
+  --fog-color: #0a0a0a;
+  --floor-color: #111111;
+  --floor-grid: #1a1a2e;
+}
+
 html,
 body {
   margin: 0;
@@ -11,10 +90,49 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #020617;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background 0.3s ease, color 0.3s ease;
 }
 
 #root {
   width: 100%;
   min-height: 100vh;
 }
+
+[data-theme="neon"] .neon-glow {
+  text-shadow: 0 0 7px var(--accent-primary), 0 0 10px var(--accent-primary),
+    0 0 21px var(--accent-primary);
+}
+
+[data-theme="neon"] .neon-border {
+  box-shadow: 0 0 5px var(--accent-primary), inset 0 0 5px rgba(0, 255, 136, 0.1);
+}
+
+[data-theme="neon"] .neon-button:hover {
+  box-shadow: 0 0 10px var(--accent-primary), 0 0 20px rgba(0, 255, 136, 0.3);
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in-right 0.4s ease-out;
+}
+
+.theme-bg-primary { background-color: var(--bg-primary); }
+.theme-bg-secondary { background-color: var(--bg-secondary); }
+.theme-bg-card { background-color: var(--bg-card); }
+.theme-border { border-color: var(--border-primary); }
+.theme-text-primary { color: var(--text-primary); }
+.theme-text-secondary { color: var(--text-secondary); }
+.theme-text-muted { color: var(--text-muted); }
+.theme-accent { color: var(--accent-primary); }

@@ -44,12 +44,16 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-900 p-4">
-          <div className="w-full max-w-lg rounded-lg bg-gray-800 p-6 shadow-xl">
+        <div className="flex min-h-screen items-center justify-center p-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
+          <div className="w-full max-w-lg rounded-lg p-6 shadow-xl" style={{ backgroundColor: 'var(--bg-card)' }}>
             <div className="mb-4 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-900">
+              <div
+                className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
+                style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)' }}
+              >
                 <svg
-                  className="h-10 w-10 text-red-500"
+                  className="h-10 w-10"
+                  style={{ color: 'var(--accent-red)' }}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -62,16 +66,16 @@ export class ErrorBoundary extends Component<Props, State> {
                   />
                 </svg>
               </div>
-              <h2 className="mb-2 text-2xl font-bold text-white">页面发生错误</h2>
-              <p className="text-gray-400">
+              <h2 className="mb-2 text-2xl font-bold" style={{ color: 'var(--text-primary)' }}>页面发生错误</h2>
+              <p style={{ color: 'var(--text-muted)' }}>
                 应用运行时遇到了异常。你可以尝试刷新页面，或者返回上一步重新进入。
               </p>
             </div>
 
             {this.state.error && (
-              <div className="mb-4 rounded-md bg-red-900/20 p-4">
-                <p className="mb-2 text-sm font-medium text-red-400">错误信息：</p>
-                <pre className="overflow-x-auto text-xs text-red-300">
+              <div className="mb-4 rounded-md p-4" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
+                <p className="mb-2 text-sm font-medium" style={{ color: 'var(--accent-red)' }}>错误信息：</p>
+                <pre className="overflow-x-auto text-xs" style={{ color: 'var(--accent-red)' }}>
                   {this.state.error.toString()}
                 </pre>
               </div>
@@ -79,10 +83,10 @@ export class ErrorBoundary extends Component<Props, State> {
 
             {this.state.errorInfo && (
               <details className="mb-4">
-                <summary className="cursor-pointer text-sm text-gray-400 hover:text-white">
+                <summary className="cursor-pointer text-sm" style={{ color: 'var(--text-muted)' }}>
                   查看详细堆栈
                 </summary>
-                <pre className="mt-2 overflow-x-auto rounded-md bg-gray-900 p-3 text-xs text-gray-300">
+                <pre className="mt-2 overflow-x-auto rounded-md p-3 text-xs" style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-secondary)' }}>
                   {this.state.errorInfo.componentStack}
                 </pre>
               </details>
@@ -91,13 +95,15 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex gap-3">
               <button
                 onClick={this.handleReset}
-                className="flex-1 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                className="flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors"
+                style={{ backgroundColor: 'var(--accent-cyan)', color: '#ffffff' }}
               >
                 刷新页面
               </button>
               <button
                 onClick={() => window.history.back()}
-                className="flex-1 rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                className="flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors"
+                style={{ backgroundColor: 'var(--bg-card-hover)', color: 'var(--text-primary)' }}
               >
                 返回上一页
               </button>
