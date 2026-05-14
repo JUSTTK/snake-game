@@ -191,15 +191,19 @@ export const ThreeJSGameBoard: React.FC<ThreeJSGameBoardProps> = ({
           <React.Fragment key={`food-${index}`}>
             <ThreeJSFood food={food} cellSize={cellSize} />
             
-            {/* 食物周围的发光效果 */}
-            {food.type === 'SPECIAL' && (
+            {food.type !== 'NORMAL' && (
               <pointLight
                 position={[
                   food.pos.x * cellSize + cellSize / 2,
                   cellSize / 2,
                   food.pos.y * cellSize + cellSize / 2
                 ]}
-                color="#facc15"
+                color={
+                  food.type === 'SPECIAL' ? '#facc15' :
+                  food.type === 'SLOW' ? '#38bdf8' :
+                  food.type === 'SHIELD' ? '#fbbf24' :
+                  food.type === 'SHRINK' ? '#f87171' : '#facc15'
+                }
                 intensity={0.5}
                 distance={4}
               />

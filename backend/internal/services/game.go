@@ -302,15 +302,15 @@ func (gs *GameService) checkCollisions(room *models.Room) {
 
 		head := snake.Body[0]
 		if head.X < 0 || head.X >= room.MapSize.X || head.Y < 0 || head.Y >= room.MapSize.Y {
-			snake.Alive = false
+			snake.KillIfUnshielded()
 			continue
 		}
 		if snake.CheckSelfCollision() {
-			snake.Alive = false
+			snake.KillIfUnshielded()
 			continue
 		}
 		if occupiedPoints[head] {
-			snake.Alive = false
+			snake.KillIfUnshielded()
 			continue
 		}
 
@@ -324,7 +324,7 @@ func (gs *GameService) checkCollisions(room *models.Room) {
 
 		for i, food := range room.Foods {
 			if snake.Body[0] == food.Pos {
-				snake.Grow()
+				snake.GrowWithFood(food.Type)
 				room.Foods = append(room.Foods[:i], room.Foods[i+1:]...)
 				break
 			}
@@ -334,15 +334,28 @@ func (gs *GameService) checkCollisions(room *models.Room) {
 
 func (gs *GameService) generateFood(room *models.Room) {
 	occupiedPoints := make([]models.Point, 0)
+	snakeHeads := make([]models.Point, 0)
+	maxSnakeLen := 0
 
 	for _, snake := range room.Players {
 		occupiedPoints = append(occupiedPoints, snake.Body...)
+		if len(snake.Body) > 0 {
+			snakeHeads = append(snakeHeads, snake.Body[0])
+		}
+		if len(snake.Body) > maxSnakeLen {
+			maxSnakeLen = len(snake.Body)
+		}
 	}
 	for _, food := range room.Foods {
 		occupiedPoints = append(occupiedPoints, food.Pos)
 	}
 
-	food := models.GenerateRandomFood(room.MapSize, occupiedPoints)
+	var food *models.Food
+	if maxSnakeLen >= 5 {
+		food = models.GenerateRandomFoodWithSnakeLen(room.MapSize, occupiedPoints, maxSnakeLen)
+	} else {
+		food = models.GenerateRandomFoodAvoidProximity(room.MapSize, occupiedPoints, snakeHeads, 3)
+	}
 	room.Foods = append(room.Foods, food)
 }
 

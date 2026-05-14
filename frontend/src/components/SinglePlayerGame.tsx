@@ -5,7 +5,7 @@ import { CameraModeSelector } from './Game/CameraModeSelector';
 import { CameraMode, ViewMode } from './Game/CameraController';
 import { MultiViewBoard } from './Game/MultiViewBoard';
 import { soundManager } from '../services/soundManager';
-import { Food, Room, Snake } from '../types/game';
+import { Food, FoodType, Room, Snake, FOOD_CONFIG } from '../types/game';
 import { isReverseDirection, isTypingTarget, keyToDirection } from '../utils/direction';
 
 export type SinglePlayerGameState = 'idle' | 'playing' | 'paused' | 'gameOver';
@@ -22,6 +22,11 @@ interface SinglePlayerGameProps {
   cellSize?: number;
 }
 
+const BASE_SPEED = 150;
+const SLOW_SPEED = 250;
+const SHIELD_DURATION = 30;
+const SLOW_DURATION = 25;
+
 const createInitialSnake = (): Snake => ({
   body: [{ x: 10, y: 10 }],
   direction: 'RIGHT',
@@ -30,6 +35,10 @@ const createInitialSnake = (): Snake => ({
   alive: true,
   name: '玩家',
   id: 'single-player',
+  shielded: false,
+  shieldTimer: 0,
+  slowed: false,
+  slowTimer: 0,
 });
 
 const createBoardRoom = (
@@ -47,6 +56,28 @@ const createBoardRoom = (
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 });
+
+const pickFoodType = (snakeLength: number): FoodType => {
+  const table: { type: FoodType; weight: number; minLen: number }[] = [
+    { type: 'NORMAL', weight: 55, minLen: 0 },
+    { type: 'SPECIAL', weight: 10, minLen: 0 },
+    { type: 'SLOW', weight: 12, minLen: 4 },
+    { type: 'SHIELD', weight: 10, minLen: 5 },
+    { type: 'SHRINK', weight: 13, minLen: 6 },
+  ];
+
+  const eligible = table.filter((e) => snakeLength >= e.minLen);
+  const totalWeight = eligible.reduce((sum, e) => sum + e.weight, 0);
+  let roll = Math.random() * totalWeight;
+
+  for (const entry of eligible) {
+    roll -= entry.weight;
+    if (roll <= 0) {
+      return entry.type;
+    }
+  }
+  return 'NORMAL';
+};
 
 export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   width = 20,
@@ -69,18 +100,41 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   const queuedDirectionRef = useRef<SinglePlayerDirection>('RIGHT');
 
   const generateFood = useCallback(
-    (occupiedBody: Point[]): Point => {
-      let nextFood: Point;
-      do {
-        nextFood = {
+    (occupiedBody: Point[], snakeLength: number): Food => {
+      let nextPos: Point;
+      const snakeHead = occupiedBody[0];
+
+      for (let attempt = 0; attempt < 50; attempt++) {
+        nextPos = {
           x: Math.floor(Math.random() * width),
           y: Math.floor(Math.random() * height),
         };
-      } while (
-        occupiedBody.some((segment) => segment.x === nextFood.x && segment.y === nextFood.y)
-      );
 
-      return nextFood;
+        if (occupiedBody.some((s) => s.x === nextPos.x && s.y === nextPos.y)) {
+          continue;
+        }
+
+        if (attempt < 40 && snakeHead) {
+          const dx = nextPos.x - snakeHead.x;
+          const dy = nextPos.y - snakeHead.y;
+          if (dx * dx + dy * dy < 9) {
+            continue;
+          }
+        }
+
+        return {
+          pos: nextPos!,
+          type: pickFoodType(snakeLength),
+        };
+      }
+
+      return {
+        pos: {
+          x: Math.floor(Math.random() * width),
+          y: Math.floor(Math.random() * height),
+        },
+        type: 'NORMAL',
+      };
     },
     [height, width]
   );
@@ -110,40 +164,93 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
       const collisionSegments = willGrow ? prevSnake.body : prevSnake.body.slice(0, -1);
 
       if (head.x < 0 || head.x >= width || head.y < 0 || head.y >= height) {
+        if (prevSnake.shielded) {
+          const nextSnake: Snake = {
+            ...prevSnake,
+            direction: activeDirection,
+            shielded: false,
+            shieldTimer: 0,
+          };
+          soundManager.play('eat_special');
+          return nextSnake;
+        }
         soundManager.play('game_over');
         setGameState('gameOver');
         return prevSnake;
       }
 
       if (collisionSegments.some((segment) => segment.x === head.x && segment.y === head.y)) {
+        if (prevSnake.shielded) {
+          const nextSnake: Snake = {
+            ...prevSnake,
+            direction: activeDirection,
+            shielded: false,
+            shieldTimer: 0,
+          };
+          soundManager.play('eat_special');
+          return nextSnake;
+        }
         soundManager.play('game_over');
         setGameState('gameOver');
         return prevSnake;
       }
 
       const nextBody = [head, ...prevSnake.body];
-      const nextSnake: Snake = {
+      let nextSnake: Snake = {
         ...prevSnake,
         direction: activeDirection,
         body: nextBody,
       };
 
       if (willGrow) {
-        soundManager.play(food.type === 'SPECIAL' ? 'eat_special' : 'eat_normal');
+        const isSpecial = food.type !== 'NORMAL';
+        soundManager.play(isSpecial ? 'eat_special' : 'eat_normal');
+
+        const config = FOOD_CONFIG[food.type];
         setScore((prevScore) => {
-          const scoreDelta = food.type === 'SPECIAL' ? 5 : 1;
-          const nextScore = prevScore + scoreDelta;
+          const nextScore = prevScore + config.score;
           setHighScore((prevHighScore) => Math.max(prevHighScore, nextScore));
           return nextScore;
         });
 
-        setFood({
-          pos: generateFood(nextBody),
-          type: Math.random() > 0.8 ? 'SPECIAL' : 'NORMAL',
-        });
+        switch (food.type) {
+          case 'SHIELD':
+            nextSnake.shielded = true;
+            nextSnake.shieldTimer = SHIELD_DURATION;
+            break;
+          case 'SLOW':
+            nextSnake.slowed = true;
+            nextSnake.slowTimer = SLOW_DURATION;
+            break;
+          case 'SHRINK':
+            if (nextSnake.body.length > 3) {
+              const removeCount = Math.max(1, Math.floor(nextSnake.body.length / 3));
+              const minLen = 3;
+              const actualRemove = Math.min(removeCount, nextSnake.body.length - minLen);
+              if (actualRemove > 0) {
+                nextSnake.body = nextSnake.body.slice(0, nextSnake.body.length - actualRemove);
+              }
+            }
+            break;
+        }
+
+        setFood(generateFood(nextBody, nextSnake.body.length));
       } else {
         soundManager.playMoveTick();
         nextSnake.body.pop();
+      }
+
+      if ((nextSnake.shieldTimer ?? 0) > 0) {
+        nextSnake.shieldTimer = (nextSnake.shieldTimer ?? 0) - 1;
+        if (nextSnake.shieldTimer <= 0) {
+          nextSnake.shielded = false;
+        }
+      }
+      if ((nextSnake.slowTimer ?? 0) > 0) {
+        nextSnake.slowTimer = (nextSnake.slowTimer ?? 0) - 1;
+        if (nextSnake.slowTimer <= 0) {
+          nextSnake.slowed = false;
+        }
       }
 
       return nextSnake;
@@ -221,11 +328,14 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   }, [gameState, pauseGame]);
 
   useEffect(() => {
-    if (gameState === 'playing') {
-      gameLoopRef.current = window.setInterval(moveSnake, 150);
-    } else if (gameLoopRef.current !== null) {
+    if (gameLoopRef.current !== null) {
       window.clearInterval(gameLoopRef.current);
       gameLoopRef.current = null;
+    }
+
+    if (gameState === 'playing') {
+      const speed = snake.slowed ? SLOW_SPEED : BASE_SPEED;
+      gameLoopRef.current = window.setInterval(moveSnake, speed);
     }
 
     return () => {
@@ -234,7 +344,7 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
         gameLoopRef.current = null;
       }
     };
-  }, [gameState, moveSnake]);
+  }, [gameState, moveSnake, snake.slowed]);
 
   useEffect(() => {
     const savedHighScore = localStorage.getItem('snakeHighScore');
@@ -290,10 +400,14 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
               onRestart={restartGame}
             />
             <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">
-              <p className="font-semibold text-white">声音与视野</p>
-              <p className="mt-2">
-                移动、转向、吃食物、开局和失败都有音效，游戏进行中会播放背景音乐。
-              </p>
+              <p className="font-semibold text-white">食物效果说明</p>
+              <div className="mt-2 space-y-1.5">
+                <p><span className="text-rose-400">●</span> 普通食物 — 增长蛇身 +1分</p>
+                <p><span className="text-yellow-400">◆</span> 特殊食物 — 增长蛇身 +5分</p>
+                <p><span className="text-sky-400">⬡</span> 减速食物 — 临时减速 +2分</p>
+                <p><span className="text-amber-400">⬠</span> 护盾食物 — 免死一次 +3分</p>
+                <p><span className="text-red-400">▲</span> 缩短食物 — 缩短蛇身 +2分</p>
+              </div>
             </div>
           </aside>
         </div>

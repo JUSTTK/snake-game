@@ -28,11 +28,11 @@ export const ThreeJSSnake: React.FC<ThreeJSSnakeProps> = ({ snake, cellSize }) =
               receiveShadow
             >
               <meshStandardMaterial
-                color={snake.color}
+                color={snake.shielded ? '#fbbf24' : snake.slowed ? '#7dd3fc' : snake.color}
                 roughness={0.38}
-                metalness={0.12}
-                emissive={snake.color}
-                emissiveIntensity={isHead ? 0.18 : 0.08}
+                metalness={snake.shielded ? 0.4 : 0.12}
+                emissive={snake.shielded ? '#fbbf24' : snake.slowed ? '#38bdf8' : snake.color}
+                emissiveIntensity={isHead ? (snake.shielded ? 0.35 : 0.18) : (snake.shielded ? 0.2 : 0.08)}
               />
             </RoundedBox>
 
@@ -40,6 +40,19 @@ export const ThreeJSSnake: React.FC<ThreeJSSnakeProps> = ({ snake, cellSize }) =
               <boxGeometry args={[segmentSize * 0.6, segmentHeight * 0.16, segmentSize * 0.45]} />
               <meshStandardMaterial color="#ecfeff" transparent opacity={0.16} />
             </mesh>
+
+            {isHead && snake.shielded && (
+              <mesh>
+                <sphereGeometry args={[cellSize * 0.7, 16, 16]} />
+                <meshStandardMaterial
+                  color="#fde68a"
+                  emissive="#f59e0b"
+                  emissiveIntensity={0.3}
+                  transparent
+                  opacity={0.12}
+                />
+              </mesh>
+            )}
 
             {isHead && (
               <Eyes
