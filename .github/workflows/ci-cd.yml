@@ -152,6 +152,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Configure Docker proxy
+        if: ${{ secrets.PROXY_URL != '' }}
+        shell: pwsh
+        run: |
+          $proxyUrl = "${{ secrets.PROXY_URL }}"
+          $dockerConfigDir = "$env:USERPROFILE\.docker"
+          if (-not (Test-Path $dockerConfigDir)) {
+            New-Item -ItemType Directory -Path $dockerConfigDir -Force | Out-Null
+          }
+          $configPath = "$dockerConfigDir\config.json"
+          $config = @{}
+          if (Test-Path $configPath) {
+            $config = Get-Content $configPath -Raw | ConvertFrom-Json -AsHashtable
+          }
+          if (-not $config.ContainsKey("proxies")) {
+            $config["proxies"] = @{}
+          }
+          $config["proxies"]["default"] = @{
+            "httpProxy"  = $proxyUrl
+            "httpsProxy" = $proxyUrl
+            "noProxy"    = "localhost,127.0.0.1"
+          }
+          $config | ConvertTo-Json -Depth 10 | Set-Content $configPath
+          Write-Host "Docker proxy configured"
+
       - name: Compute project name, ports & image names
         id: project
         shell: pwsh
@@ -190,7 +215,24 @@ jobs:
           "@ | Set-Content -Path .env -NoNewline
 
       - name: Pull latest images
-        run: docker compose pull
+        shell: pwsh
+        run: |
+          $maxRetries = 3
+          for ($i = 1; $i -le $maxRetries; $i++) {
+            Write-Host "Pull attempt $i of $maxRetries..."
+            docker compose pull 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Pull succeeded"
+              break
+            }
+            if ($i -lt $maxRetries) {
+              Write-Host "Pull failed, waiting 10 seconds before retry..."
+              Start-Sleep -Seconds 10
+            } else {
+              Write-Host "Pull failed after $maxRetries attempts"
+              exit 1
+            }
+          }
 
       - name: Deploy services
         run: |
