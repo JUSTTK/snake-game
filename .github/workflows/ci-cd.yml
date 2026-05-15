@@ -136,6 +136,11 @@ jobs:
     runs-on: self-hosted
     if: github.event_name == 'push'
 
+    env:
+      http_proxy: ${{ secrets.PROXY_URL }}
+      https_proxy: ${{ secrets.PROXY_URL }}
+      no_proxy: localhost,127.0.0.1
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -149,40 +154,40 @@ jobs:
 
       - name: Compute project name, ports & image names
         id: project
-        shell: bash
+        shell: pwsh
         run: |
-          BRANCH="${{ github.ref_name }}"
-          SAFE_NAME=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/-/g' | tr '[:upper:]' '[:lower:]')
-          echo "name=$SAFE_NAME" >> $GITHUB_OUTPUT
+          $branch = "${{ github.ref_name }}"
+          $safeName = ($branch -replace '[^a-zA-Z0-9_-]', '-').ToLower()
+          "name=$safeName" >> $env:GITHUB_OUTPUT
 
-          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "backend_image=ghcr.io/${REPO_LOWER}/snake-game-backend:${SAFE_NAME}" >> $GITHUB_OUTPUT
-          echo "frontend_image=ghcr.io/${REPO_LOWER}/snake-game-frontend:${SAFE_NAME}" >> $GITHUB_OUTPUT
+          $repoLower = "${{ github.repository }}".ToLower()
+          "backend_image=ghcr.io/${repoLower}/snake-game-backend:${safeName}" >> $env:GITHUB_OUTPUT
+          "frontend_image=ghcr.io/${repoLower}/snake-game-frontend:${safeName}" >> $env:GITHUB_OUTPUT
 
-          if [ "$BRANCH" = "main" ]; then
-            echo "backend_port=8081" >> $GITHUB_OUTPUT
-            echo "frontend_port=80" >> $GITHUB_OUTPUT
-          elif [ "$BRANCH" = "develop" ]; then
-            echo "backend_port=8082" >> $GITHUB_OUTPUT
-            echo "frontend_port=8080" >> $GITHUB_OUTPUT
-          else
-            HASH=$(echo "$BRANCH" | cksum | cut -d' ' -f1)
-            OFFSET=$((HASH % 100))
-            echo "backend_port=$((9081 + OFFSET))" >> $GITHUB_OUTPUT
-            echo "frontend_port=$((9000 + OFFSET))" >> $GITHUB_OUTPUT
-          fi
+          if ($branch -eq "main") {
+            "backend_port=8081" >> $env:GITHUB_OUTPUT
+            "frontend_port=80" >> $env:GITHUB_OUTPUT
+          } elseif ($branch -eq "develop") {
+            "backend_port=8082" >> $env:GITHUB_OUTPUT
+            "frontend_port=8080" >> $env:GITHUB_OUTPUT
+          } else {
+            $hash = $branch.GetHashCode() -band [int]::MaxValue
+            $offset = $hash % 100
+            "backend_port=$($offset + 9081)" >> $env:GITHUB_OUTPUT
+            "frontend_port=$($offset + 9000)" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Create .env file
-        shell: bash
+        shell: pwsh
         run: |
-          cat > .env << EOF
+          @"
           BACKEND_IMAGE=${{ steps.project.outputs.backend_image }}
           FRONTEND_IMAGE=${{ steps.project.outputs.frontend_image }}
           GIN_MODE=release
           SERVER_PORT=8081
           BACKEND_PORT=${{ steps.project.outputs.backend_port }}
           FRONTEND_PORT=${{ steps.project.outputs.frontend_port }}
-          EOF
+          "@ | Set-Content -Path .env -NoNewline
 
       - name: Pull latest images
         run: docker compose pull
@@ -192,12 +197,22 @@ jobs:
           docker compose -p snake-game-${{ steps.project.outputs.name }} up -d --force-recreate --remove-orphans
 
       - name: Health check
-        shell: bash
+        shell: pwsh
         run: |
-          echo "Waiting for services to start..."
-          sleep 8
-          curl.exe -sf http://localhost:${{ steps.project.outputs.backend_port }}/health || echo "Backend health check endpoint not available (may not exist yet)"
-          curl.exe -sf http://localhost:${{ steps.project.outputs.frontend_port }} || echo "Frontend health check failed"
+          Write-Host "Waiting for services to start..."
+          Start-Sleep -Seconds 8
+          try {
+            Invoke-WebRequest -Uri "http://localhost:${{ steps.project.outputs.backend_port }}/health" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Write-Host "Backend is healthy"
+          } catch {
+            Write-Host "Backend health check endpoint not available (may not exist yet)"
+          }
+          try {
+            Invoke-WebRequest -Uri "http://localhost:${{ steps.project.outputs.frontend_port }}" -UseBasicParsing -TimeoutSec 5 | Out-Null
+            Write-Host "Frontend is healthy"
+          } catch {
+            Write-Host "Frontend health check failed"
+          }
 
       - name: Cleanup old images
         run: docker image prune -f
