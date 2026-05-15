@@ -30,7 +30,7 @@ export const SpatialAudio: React.FC<SpatialAudioProps> = ({
 
     const playSpatialSound = async () => {
       try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioContext = window.AudioContext || (window as unknown as { webkitAudioContext: typeof window.AudioContext }).webkitAudioContext;
         const audioContext = new AudioContext();
 
         const audioBuffer = generateAudioBuffer(type, audioContext);
@@ -65,6 +65,7 @@ export const SpatialAudio: React.FC<SpatialAudioProps> = ({
     if (!isPlaying) {
       playSpatialSound();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [position, type, enabled]);
 
   return null;
@@ -144,7 +145,7 @@ export const AmbientAudio3D: React.FC<{ enabled?: boolean }> = ({
 
     const playAmbientSound = async () => {
       try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        const AudioContext = window.AudioContext || (window as unknown as { webkitAudioContext: typeof window.AudioContext }).webkitAudioContext;
         const audioContext = new AudioContext();
 
         const duration = 10;
@@ -183,6 +184,7 @@ export const AmbientAudio3D: React.FC<{ enabled?: boolean }> = ({
     if (!isPlaying) {
       playAmbientSound();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
   return null;

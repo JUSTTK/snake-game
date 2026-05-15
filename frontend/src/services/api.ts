@@ -1,6 +1,6 @@
 interface WebSocketMessage {
   type: string;
-  data?: any;
+  data?: unknown;
 }
 
 export class GameAPI {
@@ -191,7 +191,7 @@ export class GameAPI {
     this.notifyConnectionState(false);
   }
 
-  sendMessage(type: string, data?: any) {
+  sendMessage(type: string, data?: unknown) {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       const message: WebSocketMessage = { type, data };
       this.ws.send(JSON.stringify(message));

@@ -6,14 +6,17 @@ import * as THREE from 'three';
 export type ViewMode = 'top' | 'isometric' | 'perspective';
 export type CameraMode = 'tight' | 'comfort';
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const VIEW_MODES: ViewMode[] = ['isometric', 'top', 'perspective'];
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const VIEW_MODE_LABELS: Record<ViewMode, string> = {
   top: '俯视图',
   isometric: '等轴视角',
   perspective: '透视跟随',
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const CAMERA_MODE_LABELS: Record<CameraMode, string> = {
   tight: '紧跟模式',
   comfort: '舒适模式',

@@ -43,7 +43,7 @@ export type GameState = 'WAITING' | 'PLAYING' | 'PAUSED' | 'FINISHED';
 
 export interface WebSocketMessage {
   type: string;
-  data?: any;
+  data?: unknown;
 }
 
 export const FOOD_CONFIG: Record<FoodType, { color: string; emissive: string; score: number; label: string }> = {

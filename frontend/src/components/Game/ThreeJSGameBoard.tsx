@@ -6,7 +6,7 @@ import { CameraController, CameraMode } from './CameraController';
 import { ThreeJSFloor } from './ThreeJSFloor';
 import { ThreeJSFood } from './ThreeJSFood';
 import { ThreeJSSnake } from './ThreeJSSnake';
-import { ParticleEffect } from './ParticleEffect';
+import { ParticleEffect, type ParticleEffectProps } from './ParticleEffect';
 import { SnakeTrail, SnakeGlowTrail } from './SnakeTrail';
 import { DynamicLighting } from './DynamicLighting';
 import { SpatialAudio, AmbientAudio3D } from './Audio3D';
@@ -242,7 +242,7 @@ export const ThreeJSGameBoard: React.FC<ThreeJSGameBoardProps> = ({
           <ParticleEffect
             key={particle.id}
             position={particle.position}
-            type={particle.type as any}
+            type={particle.type as ParticleEffectProps['type']}
             isActive={true}
             onComplete={() => {
               setActiveParticles(prev => prev.filter(p => p.id !== particle.id));

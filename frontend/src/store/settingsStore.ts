@@ -192,14 +192,18 @@ const loadFromStorage = <T>(key: string, fallback: T): T => {
     if (stored) {
       return { ...fallback, ...JSON.parse(stored) };
     }
-  } catch {}
+  } catch {
+    // localStorage may be unavailable in some environments
+  }
   return fallback;
 };
 
 const saveToStorage = (key: string, value: unknown) => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  } catch {
+    // localStorage may be unavailable in some environments
+  }
 };
 
 const loadAchievements = (): Achievement[] => {

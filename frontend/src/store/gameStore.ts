@@ -154,7 +154,7 @@ export const useGameStore = create<GameStateStore>((set, get) => ({
       });
 
       gameAPI.onError((message) => {
-        const errorMessage = message.data || '发生未知错误。';
+        const errorMessage = (message.data as string) || '发生未知错误。';
         set({ error: errorMessage });
       });
 

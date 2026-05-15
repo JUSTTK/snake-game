@@ -253,7 +253,7 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
       }
 
       const nextBody = [head, ...prevSnake.body];
-      let nextSnake: Snake = {
+      const nextSnake: Snake = {
         ...prevSnake,
         direction: activeDirection,
         body: nextBody,
