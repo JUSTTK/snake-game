@@ -2,12 +2,37 @@ package main
 
 import (
 	"log"
+	"net/http"
+	"os"
+	"path/filepath"
 	"snake-game/internal/config"
 	"snake-game/internal/handlers"
 	"snake-game/internal/services"
 
 	"github.com/gin-gonic/gin"
 )
+
+func setupFrontendRoutes(r *gin.Engine) {
+	distPath := filepath.Clean("../frontend/dist")
+	indexPath := filepath.Join(distPath, "index.html")
+
+	if _, err := os.Stat(indexPath); err != nil {
+		log.Printf("Frontend dist not found at %s; running API/WebSocket only", indexPath)
+		r.GET("/", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{
+				"service": "snake-game-backend",
+				"status":  "ok",
+			})
+		})
+		return
+	}
+
+	r.Static("/static", distPath)
+	r.StaticFile("/", indexPath)
+	r.NoRoute(func(c *gin.Context) {
+		c.File(indexPath)
+	})
+}
 
 func main() {
 	// 加载配置
@@ -24,8 +49,7 @@ func main() {
 	r := gin.Default()
 
 	// 静态文件服务
-	r.Static("/static", "../frontend/dist")
-	r.LoadHTMLFiles("../frontend/dist/index.html")
+	setupFrontendRoutes(r)
 
 	// HTTP路由
 	rooms := r.Group("/api/rooms")
@@ -37,11 +61,6 @@ func main() {
 
 	// WebSocket路由
 	r.GET("/ws", webSocketHandler.HandleWebSocket)
-
-	// 前端路由
-	r.GET("/", func(c *gin.Context) {
-		c.HTML(200, "index.html", nil)
-	})
 
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {

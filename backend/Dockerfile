@@ -2,6 +2,7 @@
 FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
+ENV GOPROXY=https://goproxy.cn,direct
 
 # 复制go mod文件
 COPY go.mod go.sum ./

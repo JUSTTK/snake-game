@@ -5,7 +5,7 @@ WORKDIR /app
 
 # 复制package文件
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --include=dev
 
 # 复制源代码
 COPY . .

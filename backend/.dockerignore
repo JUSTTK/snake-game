@@ -1,0 +1,6 @@
+.gocache
+.gomodcache
+server
+server.exe
+server-smoke.exe
+*.log

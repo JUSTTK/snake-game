@@ -5,6 +5,6 @@ docker-compose up --build -d
 
 echo Services started!
 echo Frontend: http://localhost
-echo Backend: http://localhost:8080
+echo Backend: http://localhost:8081
 
 pause
