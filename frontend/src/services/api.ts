@@ -31,7 +31,7 @@ export class GameAPI {
       this.currentPlayerName = playerName;
       this.shouldReconnect = true;
 
-      const wsBaseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8081/ws';
+      const wsBaseUrl = import.meta.env.VITE_WS_URL || (import.meta.env.DEV ? '/ws' : 'ws://localhost:8081/ws');
       const wsURL = `${wsBaseUrl}?room_id=${roomID}&player_id=${playerID}&player_name=${playerName}`;
       console.log('正在连接 WebSocket:', wsURL);
       this.ws = new WebSocket(wsURL);
