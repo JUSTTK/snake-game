@@ -9,10 +9,15 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/net/websocket"
+	"github.com/gorilla/websocket"
 )
 
-// WebSocketMessage 定义WebSocket消息格式
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
 type WebSocketMessage struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data,omitempty"`
@@ -30,7 +35,6 @@ func NewHTTPWebSocketHandler(gameService *services.GameService) *HTTPWebSocketHa
 		roomConnections: make(map[string][]*websocket.Conn),
 	}
 
-	// 设置状态更新回调，当游戏状态变化时自动广播
 	gameService.SetStateUpdateCallback(func(roomID string) {
 		handler.sendGameStateToRoom(roomID)
 	})
@@ -48,67 +52,63 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	websocket.Handler(func(ws *websocket.Conn) {
-		defer ws.Close()
-		defer func() {
-			h.gameService.RemovePlayerFromRoom(roomID, playerID)
-			h.sendGameStateToRoom(roomID)
-		}()
+	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade error: %v", err)
+		return
+	}
+	defer ws.Close()
 
-		// 注册连接
-		h.mu.Lock()
-		h.roomConnections[roomID] = append(h.roomConnections[roomID], ws)
-		h.mu.Unlock()
+	defer func() {
+		h.gameService.RemovePlayerFromRoom(roomID, playerID)
+		h.sendGameStateToRoom(roomID)
+	}()
 
-		// 添加玩家到房间
-		_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
-		if !success {
-			// 如果房间不存在，创建新房间
-			if _, exists := h.gameService.GetRoom(roomID); !exists {
-				h.gameService.CreateRoomWithID(roomID, roomID)
-				// 再次尝试加入
-				_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
-				if !success {
-					sendMessage(ws, WebSocketMessage{
-						Type: "ERROR",
-						Data: "Failed to join room",
-					})
-					return
-				}
-			} else {
+	h.mu.Lock()
+	h.roomConnections[roomID] = append(h.roomConnections[roomID], ws)
+	h.mu.Unlock()
+
+	_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
+	if !success {
+		if _, exists := h.gameService.GetRoom(roomID); !exists {
+			h.gameService.CreateRoomWithID(roomID, roomID)
+			_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
+			if !success {
 				sendMessage(ws, WebSocketMessage{
 					Type: "ERROR",
-					Data: "Room is full",
+					Data: "Failed to join room",
 				})
 				return
 			}
+		} else {
+			sendMessage(ws, WebSocketMessage{
+				Type: "ERROR",
+				Data: "Room is full",
+			})
+			return
 		}
+	}
 
-		// 发送初始游戏状态
-		h.sendGameStateToRoom(roomID)
+	h.sendGameStateToRoom(roomID)
 
-		// 处理客户端消息
-		h.handleMessages(ws, roomID, playerID)
+	h.handleMessages(ws, roomID, playerID)
 
-		// 连接断开时清理
-		h.mu.Lock()
-		for i, conn := range h.roomConnections[roomID] {
-			if conn == ws {
-				h.roomConnections[roomID] = append(h.roomConnections[roomID][:i], h.roomConnections[roomID][i+1:]...)
-				break
-			}
+	h.mu.Lock()
+	for i, conn := range h.roomConnections[roomID] {
+		if conn == ws {
+			h.roomConnections[roomID] = append(h.roomConnections[roomID][:i], h.roomConnections[roomID][i+1:]...)
+			break
 		}
-		if len(h.roomConnections[roomID]) == 0 {
-			delete(h.roomConnections, roomID)
-		}
-		h.mu.Unlock()
-	}).ServeHTTP(c.Writer, c.Request)
+	}
+	if len(h.roomConnections[roomID]) == 0 {
+		delete(h.roomConnections, roomID)
+	}
+	h.mu.Unlock()
 }
 
 func (h *HTTPWebSocketHandler) handleMessages(ws *websocket.Conn, roomID, playerID string) {
 	for {
-		var data []byte
-		err := websocket.Message.Receive(ws, &data)
+		_, data, err := ws.ReadMessage()
 		if err != nil {
 			log.Printf("WebSocket receive error: %v", err)
 			return
@@ -184,7 +184,6 @@ func (h *HTTPWebSocketHandler) sendGameStateToRoom(roomID string) {
 		},
 	}
 
-	// 广播给房间内的所有连接
 	h.mu.RLock()
 	connections := h.roomConnections[roomID]
 	h.mu.RUnlock()
@@ -201,5 +200,7 @@ func sendMessage(ws *websocket.Conn, msg WebSocketMessage) {
 		return
 	}
 
-	websocket.Message.Send(ws, data)
+	if err := ws.WriteMessage(websocket.TextMessage, data); err != nil {
+		log.Printf("WebSocket send error: %v", err)
+	}
 }
