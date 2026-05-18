@@ -24,6 +24,27 @@ export class GameAPI {
   private heartbeatIntervalTime = 30000;
   private heartbeatTimeoutTime = 35000;
 
+  private getWebSocketBaseUrl(): string {
+    const configuredUrl = import.meta.env.VITE_WS_URL?.trim() || '/ws';
+    const resolvedUrl = new URL(configuredUrl, window.location.href);
+
+    if (resolvedUrl.protocol === 'http:') {
+      resolvedUrl.protocol = 'ws:';
+    } else if (resolvedUrl.protocol === 'https:') {
+      resolvedUrl.protocol = 'wss:';
+    }
+
+    return resolvedUrl.toString();
+  }
+
+  private buildWebSocketUrl(roomID: string, playerID: string, playerName: string): string {
+    const wsUrl = new URL(this.getWebSocketBaseUrl());
+    wsUrl.searchParams.set('room_id', roomID);
+    wsUrl.searchParams.set('player_id', playerID);
+    wsUrl.searchParams.set('player_name', playerName);
+    return wsUrl.toString();
+  }
+
   connect(roomID: string, playerID: string, playerName: string): Promise<void> {
     return new Promise((resolve, reject) => {
       this.currentRoomID = roomID;
@@ -31,13 +52,27 @@ export class GameAPI {
       this.currentPlayerName = playerName;
       this.shouldReconnect = true;
 
-      const wsBaseUrl = import.meta.env.VITE_WS_URL || (import.meta.env.DEV ? '/ws' : 'ws://localhost:8081/ws');
-      const wsURL = `${wsBaseUrl}?room_id=${roomID}&player_id=${playerID}&player_name=${playerName}`;
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+
+      let hasOpened = false;
+      let hasRejected = false;
+      const rejectOnce = (error: unknown) => {
+        if (!hasOpened && !hasRejected) {
+          hasRejected = true;
+          reject(error);
+        }
+      };
+
+      const wsURL = this.buildWebSocketUrl(roomID, playerID, playerName);
       console.log('正在连接 WebSocket:', wsURL);
       this.ws = new WebSocket(wsURL);
 
       this.ws.onopen = () => {
         console.log('WebSocket 已连接');
+        hasOpened = true;
         this.reconnectAttempts = 0;
         this.notifyConnectionState(true);
         this.startHeartbeat();
@@ -46,7 +81,7 @@ export class GameAPI {
 
       this.ws.onerror = (error) => {
         console.error('WebSocket 连接错误:', error);
-        reject(error);
+        rejectOnce(error);
       };
 
       this.ws.onclose = (event) => {
@@ -54,9 +89,11 @@ export class GameAPI {
         this.stopHeartbeat();
         this.notifyConnectionState(false);
 
-        if (this.shouldReconnect && event.code !== 1000) {
+        if (this.shouldReconnect && event.code !== 1000 && hasOpened) {
           this.attemptReconnect();
         }
+
+        rejectOnce(new Error(`WebSocket closed before connection opened: ${event.code}`));
       };
 
       this.ws.onmessage = (event) => {
@@ -126,7 +163,9 @@ export class GameAPI {
         })
         .catch((error) => {
           console.error('重新连接失败:', error);
-          this.attemptReconnect();
+          if (this.shouldReconnect) {
+            this.attemptReconnect();
+          }
         });
     }, delay);
   }

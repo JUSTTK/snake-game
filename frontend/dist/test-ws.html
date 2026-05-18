@@ -105,11 +105,15 @@
                 return;
             }
 
-            const wsUrl = `ws://localhost:8080/ws?room_id=${roomId}&player_id=${playerId}&player_name=${playerName}`;
-            addLog(`正在连接: ${wsUrl}`, 'info');
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = new URL('/ws', `${protocol}//${window.location.host}`);
+            wsUrl.searchParams.set('room_id', roomId);
+            wsUrl.searchParams.set('player_id', playerId);
+            wsUrl.searchParams.set('player_name', playerName);
+            addLog(`正在连接: ${wsUrl.toString()}`, 'info');
 
             try {
-                ws = new WebSocket(wsUrl);
+                ws = new WebSocket(wsUrl.toString());
 
                 ws.onopen = () => {
                     addLog('连接成功！', 'success');
@@ -125,7 +129,7 @@
                             const reader = new FileReader();
                             reader.onload = () => {
                                 try {
-                                    const message = JSON.parse(reader.result as string);
+                                    const message = JSON.parse(reader.result);
                                     addLog(`收到消息: ${JSON.stringify(message)}`, 'info');
 
                                     if (message.type === 'GAME_STATE') {

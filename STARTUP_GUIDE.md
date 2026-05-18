@@ -6,7 +6,7 @@
 
 - 后端：Go + Gin，负责房间管理、多人游戏状态、WebSocket 通信。
 - 前端：React + TypeScript + Vite，负责单机模式界面、多人模式界面和输入交互。
-- 多人模式：浏览器通过 WebSocket 连接后端 `ws://localhost:8081/ws`。
+- 多人模式：浏览器通过当前页面同源的 `/ws` 建立 WebSocket 连接，再由 Vite 或 Nginx 代理到后端。
 - 单机模式：在前端本地运行，不依赖后端。
 
 ## 2. 环境要求
@@ -23,8 +23,7 @@
 原因：
 
 - 日志更清晰，便于排查问题
-- 多人模式默认直接连接 `localhost:8081`
-- 当前 Docker/Nginx 配置仍有一处历史端口不一致问题，需要额外注意
+- 多人模式默认通过 `/ws` 代理连接后端，适配本地开发和 Docker/Nginx 部署
 
 ## 4. 本地开发启动
 
@@ -82,7 +81,7 @@ http://localhost:5173
 补充说明：
 
 - Vite 开发服务器已在 [vite.config.ts](/d:/code/cc_test/snake-game/frontend/vite.config.ts:12) 中代理 `/api` 和 `/ws` 到 `localhost:8081`
-- 多人模式当前前端 WebSocket 客户端默认直接连接 `ws://localhost:8081/ws`，定义在 [api.ts](/d:/code/cc_test/snake-game/frontend/src/services/api.ts:34)
+- 多人模式当前前端 WebSocket 客户端默认使用 `/ws`，运行时会转换为当前页面对应的 `ws://.../ws` 或 `wss://.../ws`，定义在 [api.ts](/d:/code/cc_test/snake-game/frontend/src/services/api.ts:34)
 
 ## 5. 启动后如何使用
 
@@ -236,27 +235,24 @@ npm run build
 
 - 后端是否确实启动在 `http://localhost:8081`
 - 浏览器控制台是否有 WebSocket 报错
-- 前端是否通过本机访问，而不是远程域名访问
+- Vite 或 Nginx 的 `/ws` 代理是否指向后端 `8081`
 
 当前多人模式前端默认连接地址为：
 
 ```text
-ws://localhost:8081/ws
+/ws
 ```
 
-如果你换了后端地址或端口，需要同步调整前端的 `VITE_WS_URL`，或者修改 [api.ts](/d:/code/cc_test/snake-game/frontend/src/services/api.ts:34)。
+前端会在运行时把 `/ws` 转换成当前页面对应的 WebSocket 地址，例如 `ws://localhost:5173/ws` 或 `ws://localhost/ws`，再通过代理转发到后端。如果你需要绕过代理直接连接后端，可以把 `VITE_WS_URL` 改成 `ws://localhost:8081/ws`。
 
-### 9.2 Docker 环境下 API 或 WebSocket 代理异常
+### 9.2 Docker 环境下 API 或 WebSocket 代理
 
-当前仓库里仍有一个历史配置问题：
+当前 Docker/Nginx 配置已统一到后端 `8081`：
 
 - `docker-compose.yml` 中后端容器对外暴露的是 `8081`
-- 但 [nginx.conf](/d:/code/cc_test/snake-game/frontend/nginx.conf:13) 里 `/api` 和 `/ws` 代理目标仍写成了 `backend:8080`
+- [nginx.conf](/d:/code/cc_test/snake-game/frontend/nginx.conf:13) 里 `/api` 和 `/ws` 代理目标是 `backend:8081`
 
-这意味着：
-
-- 浏览器直接连 `ws://localhost:8081/ws` 时，多人模式通常还能工作
-- 但如果依赖 Nginx 反向代理 `/api` 或 `/ws`，可能出现转发失败
+如果 Docker 环境仍无法连接，请优先确认前端镜像是否已重新构建，并检查后端容器健康状态。
 
 ### 9.3 `start-prod.bat` 提示的后端端口不对
 
