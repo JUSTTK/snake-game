@@ -125,6 +125,8 @@ func (h *HTTPWebSocketHandler) handleMessages(ws *websocket.Conn, roomID, player
 		log.Printf("Parsed message: Type=%s, Data=%v", msg.Type, msg.Data)
 
 		switch msg.Type {
+		case "PING":
+			sendMessage(ws, WebSocketMessage{Type: "PONG", Data: "pong"})
 		case "MOVE":
 			if direction, ok := msg.Data.(string); ok {
 				log.Printf("Processing MOVE: %s", direction)
