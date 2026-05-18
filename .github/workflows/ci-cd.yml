@@ -153,10 +153,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Docker proxy
-        if: ${{ secrets.PROXY_URL != '' }}
         shell: pwsh
         run: |
           $proxyUrl = "${{ secrets.PROXY_URL }}"
+          if ([string]::IsNullOrWhiteSpace($proxyUrl)) {
+            Write-Host "No proxy configured, skipping"
+            exit 0
+          }
           $dockerConfigDir = "$env:USERPROFILE\.docker"
           if (-not (Test-Path $dockerConfigDir)) {
             New-Item -ItemType Directory -Path $dockerConfigDir -Force | Out-Null
