@@ -3,7 +3,6 @@ version: '3.8'
 services:
   backend:
     image: ${BACKEND_IMAGE:-snake-game-backend}
-    build: ./backend
     ports:
       - "${BACKEND_PORT:-8081}:8081"
     environment:
@@ -15,7 +14,6 @@ services:
 
   frontend:
     image: ${FRONTEND_IMAGE:-snake-game-frontend}
-    build: ./frontend
     ports:
       - "${FRONTEND_PORT:-80}:80"
     depends_on:
