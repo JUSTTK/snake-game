@@ -23,16 +23,27 @@ type WebSocketMessage struct {
 	Data interface{} `json:"data,omitempty"`
 }
 
+type clientConn struct {
+	conn *websocket.Conn
+	mu   sync.Mutex
+}
+
+func (c *clientConn) writeMessage(msgType int, data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.conn.WriteMessage(msgType, data)
+}
+
 type HTTPWebSocketHandler struct {
 	gameService     *services.GameService
-	roomConnections map[string][]*websocket.Conn
+	roomConnections map[string][]*clientConn
 	mu              sync.RWMutex
 }
 
 func NewHTTPWebSocketHandler(gameService *services.GameService) *HTTPWebSocketHandler {
 	handler := &HTTPWebSocketHandler{
 		gameService:     gameService,
-		roomConnections: make(map[string][]*websocket.Conn),
+		roomConnections: make(map[string][]*clientConn),
 	}
 
 	gameService.SetStateUpdateCallback(func(roomID string) {
@@ -57,6 +68,8 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 		log.Printf("WebSocket upgrade error: %v", err)
 		return
 	}
+
+	client := &clientConn{conn: ws}
 	defer ws.Close()
 
 	defer func() {
@@ -65,7 +78,7 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 	}()
 
 	h.mu.Lock()
-	h.roomConnections[roomID] = append(h.roomConnections[roomID], ws)
+	h.roomConnections[roomID] = append(h.roomConnections[roomID], client)
 	h.mu.Unlock()
 
 	_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
@@ -74,14 +87,14 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 			h.gameService.CreateRoomWithID(roomID, roomID)
 			_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
 			if !success {
-				sendMessage(ws, WebSocketMessage{
+				sendMessage(client, WebSocketMessage{
 					Type: "ERROR",
 					Data: "Failed to join room",
 				})
 				return
 			}
 		} else {
-			sendMessage(ws, WebSocketMessage{
+			sendMessage(client, WebSocketMessage{
 				Type: "ERROR",
 				Data: "Room is full",
 			})
@@ -91,11 +104,11 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 
 	h.sendGameStateToRoom(roomID)
 
-	h.handleMessages(ws, roomID, playerID)
+	h.handleMessages(client, roomID, playerID)
 
 	h.mu.Lock()
-	for i, conn := range h.roomConnections[roomID] {
-		if conn == ws {
+	for i, cc := range h.roomConnections[roomID] {
+		if cc == client {
 			h.roomConnections[roomID] = append(h.roomConnections[roomID][:i], h.roomConnections[roomID][i+1:]...)
 			break
 		}
@@ -106,9 +119,9 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 	h.mu.Unlock()
 }
 
-func (h *HTTPWebSocketHandler) handleMessages(ws *websocket.Conn, roomID, playerID string) {
+func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, playerID string) {
 	for {
-		_, data, err := ws.ReadMessage()
+		_, data, err := client.conn.ReadMessage()
 		if err != nil {
 			log.Printf("WebSocket receive error: %v", err)
 			return
@@ -126,7 +139,7 @@ func (h *HTTPWebSocketHandler) handleMessages(ws *websocket.Conn, roomID, player
 
 		switch msg.Type {
 		case "PING":
-			sendMessage(ws, WebSocketMessage{Type: "PONG", Data: "pong"})
+			sendMessage(client, WebSocketMessage{Type: "PONG", Data: "pong"})
 		case "MOVE":
 			if direction, ok := msg.Data.(string); ok {
 				log.Printf("Processing MOVE: %s", direction)
@@ -185,22 +198,23 @@ func (h *HTTPWebSocketHandler) sendGameStateToRoom(roomID string) {
 	}
 
 	h.mu.RLock()
-	connections := h.roomConnections[roomID]
+	connections := make([]*clientConn, len(h.roomConnections[roomID]))
+	copy(connections, h.roomConnections[roomID])
 	h.mu.RUnlock()
 
-	for _, conn := range connections {
-		sendMessage(conn, msg)
+	for _, client := range connections {
+		sendMessage(client, msg)
 	}
 }
 
-func sendMessage(ws *websocket.Conn, msg WebSocketMessage) {
+func sendMessage(client *clientConn, msg WebSocketMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Printf("JSON marshal error: %v", err)
 		return
 	}
 
-	if err := ws.WriteMessage(websocket.TextMessage, data); err != nil {
+	if err := client.writeMessage(websocket.TextMessage, data); err != nil {
 		log.Printf("WebSocket send error: %v", err)
 	}
 }

@@ -80,6 +80,8 @@ func (gs *GameService) GetRoom(roomID string) (*models.Room, bool) {
 	return room, exists
 }
 
+var playerColors = []string{"#4ade80", "#38bdf8", "#f472b6", "#facc15"}
+
 func (gs *GameService) AddPlayerToRoom(roomID, playerID, playerName string) (*models.Snake, bool) {
 	gs.roomMutex.Lock()
 	defer gs.roomMutex.Unlock()
@@ -89,9 +91,11 @@ func (gs *GameService) AddPlayerToRoom(roomID, playerID, playerName string) (*mo
 		return nil, false
 	}
 
-	startPos, direction := gs.findStartPosition(len(room.Players))
+	playerIndex := len(room.Players)
+	startPos, direction := gs.findStartPosition(playerIndex)
 	body := gs.buildInitialBody(startPos, direction)
 	snake := models.NewSnakeWithBody(playerID, playerName, body, direction)
+	snake.Color = playerColors[playerIndex%len(playerColors)]
 
 	if room.AddPlayer(snake) {
 		return snake, true
@@ -108,6 +112,7 @@ func (gs *GameService) RemovePlayerFromRoom(roomID, playerID string) {
 		room.RemovePlayer(playerID)
 		if len(room.Players) == 0 {
 			gs.stopGameLoop(roomID)
+			delete(gs.rooms, roomID)
 		}
 	}
 }
