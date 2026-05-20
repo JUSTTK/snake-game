@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { useSettingsStore, ThemeMode, GraphicsQuality, ControlScheme } from '../store/settingsStore';
+import { useSettingsStore } from '../store/settingsStore';
 
 describe('useSettingsStore', () => {
   beforeEach(() => {
