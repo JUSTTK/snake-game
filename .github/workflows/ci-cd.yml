@@ -40,7 +40,7 @@ jobs:
       - name: Go vet
         run: go vet ./...
 
-      - name: Unit Tests
+      - name: Go Tests
         run: go test ./... -v -coverprofile=coverage.out
 
       - name: Upload coverage report
