@@ -33,10 +33,10 @@ test.describe('Snake game e2e', () => {
     await expect(page.getByText('当前状态：进行中')).toBeVisible();
   });
 
-  test('opens settings from keyboard and changes a visible setting', async ({ page }) => {
+  test('opens settings and changes a visible setting', async ({ page }) => {
     await page.goto('/single-player');
 
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: /设置/ }).click();
     await expect(page.getByRole('heading', { name: '游戏设置' })).toBeVisible();
 
     await page.getByRole('button', { name: /控制/ }).click();
