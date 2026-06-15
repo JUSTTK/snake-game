@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"snake-game/internal/config"
 	"snake-game/internal/handlers"
 	"snake-game/internal/services"
 	"strings"
@@ -22,9 +23,9 @@ func newE2EServer(t *testing.T) *httptest.Server {
 	t.Helper()
 
 	gin.SetMode(gin.TestMode)
-	gameService := services.NewGameService()
+	gameService := services.NewGameService(config.Load())
 	roomHandler := handlers.NewRoomHandler(gameService)
-	webSocketHandler := handlers.NewHTTPWebSocketHandler(gameService)
+	webSocketHandler := handlers.NewHTTPWebSocketHandler(gameService, config.Load())
 
 	router := gin.New()
 	router.GET("/health", func(c *gin.Context) {

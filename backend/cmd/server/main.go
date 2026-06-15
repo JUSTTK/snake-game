@@ -39,11 +39,11 @@ func main() {
 	cfg := config.Load()
 
 	// 创建游戏服务
-	gameService := services.NewGameService()
+	gameService := services.NewGameService(cfg)
 
 	// 创建处理器
 	roomHandler := handlers.NewRoomHandler(gameService)
-	webSocketHandler := handlers.NewHTTPWebSocketHandler(gameService)
+	webSocketHandler := handlers.NewHTTPWebSocketHandler(gameService, cfg)
 
 	// 设置Gin路由
 	r := gin.Default()

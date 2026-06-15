@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewRoom(t *testing.T) {
-	room := NewRoom("test-room")
+	room := NewRoom("test-room", 20, 15)
 	if room.Name != "test-room" {
 		t.Errorf("expected room name 'test-room', got '%s'", room.Name)
 	}
@@ -27,7 +27,7 @@ func TestNewRoom(t *testing.T) {
 }
 
 func TestNewRoomWithID(t *testing.T) {
-	room := NewRoomWithID("custom-id", "my-room")
+	room := NewRoomWithID("custom-id", "my-room", 20, 15)
 	if room.ID != "custom-id" {
 		t.Errorf("expected ID 'custom-id', got '%s'", room.ID)
 	}
@@ -37,10 +37,10 @@ func TestNewRoomWithID(t *testing.T) {
 }
 
 func TestRoom_AddPlayer(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 
 	snake1 := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
-	if !room.AddPlayer(snake1) {
+	if !room.AddPlayer(snake1, 4) {
 		t.Error("expected AddPlayer to succeed")
 	}
 	if len(room.Players) != 1 {
@@ -48,7 +48,7 @@ func TestRoom_AddPlayer(t *testing.T) {
 	}
 
 	snake2 := NewSnake("p2", "Player 2", Point{X: 14, Y: 7})
-	if !room.AddPlayer(snake2) {
+	if !room.AddPlayer(snake2, 4) {
 		t.Error("expected AddPlayer for second player to succeed")
 	}
 	if len(room.Players) != 2 {
@@ -57,27 +57,27 @@ func TestRoom_AddPlayer(t *testing.T) {
 }
 
 func TestRoom_AddPlayer_MaxPlayers(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 
 	for i := 0; i < 4; i++ {
 		snake := NewSnake("p"+string(rune('0'+i)), "Player", Point{X: i, Y: 0})
-		if !room.AddPlayer(snake) {
+		if !room.AddPlayer(snake, 4) {
 			t.Errorf("expected AddPlayer %d to succeed", i)
 		}
 	}
 
 	snake5 := NewSnake("p5", "Player 5", Point{X: 0, Y: 0})
-	if room.AddPlayer(snake5) {
+	if room.AddPlayer(snake5, 4) {
 		t.Error("expected AddPlayer to fail when room is full")
 	}
 }
 
 func TestRoom_RemovePlayer(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 	snake1 := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
 	snake2 := NewSnake("p2", "Player 2", Point{X: 14, Y: 7})
-	room.AddPlayer(snake1)
-	room.AddPlayer(snake2)
+	room.AddPlayer(snake1, 4)
+	room.AddPlayer(snake2, 4)
 
 	room.RemovePlayer("p1")
 	if len(room.Players) != 1 {
@@ -89,9 +89,9 @@ func TestRoom_RemovePlayer(t *testing.T) {
 }
 
 func TestRoom_RemovePlayer_NotFound(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 	snake := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
-	room.AddPlayer(snake)
+	room.AddPlayer(snake, 4)
 
 	room.RemovePlayer("nonexistent")
 	if len(room.Players) != 1 {
@@ -100,9 +100,9 @@ func TestRoom_RemovePlayer_NotFound(t *testing.T) {
 }
 
 func TestRoom_GetSnake(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 	snake := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
-	room.AddPlayer(snake)
+	room.AddPlayer(snake, 4)
 
 	found := room.GetSnake("p1")
 	if found == nil {
@@ -119,9 +119,9 @@ func TestRoom_GetSnake(t *testing.T) {
 }
 
 func TestRoom_GetSnakeByID(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 	snake := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
-	room.AddPlayer(snake)
+	room.AddPlayer(snake, 4)
 
 	found := room.GetSnakeByID(snake.ID)
 	if found == nil {
@@ -135,20 +135,20 @@ func TestRoom_GetSnakeByID(t *testing.T) {
 }
 
 func TestRoom_CheckAllPlayersReady(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 
 	if room.CheckAllPlayersReady() {
 		t.Error("expected CheckAllPlayersReady to be false with 0 players")
 	}
 
 	snake1 := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
-	room.AddPlayer(snake1)
+	room.AddPlayer(snake1, 4)
 	if room.CheckAllPlayersReady() {
 		t.Error("expected CheckAllPlayersReady to be false with 1 player")
 	}
 
 	snake2 := NewSnake("p2", "Player 2", Point{X: 14, Y: 7})
-	room.AddPlayer(snake2)
+	room.AddPlayer(snake2, 4)
 	if !room.CheckAllPlayersReady() {
 		t.Error("expected CheckAllPlayersReady to be true with 2 alive players")
 	}
@@ -160,11 +160,11 @@ func TestRoom_CheckAllPlayersReady(t *testing.T) {
 }
 
 func TestRoom_CheckGameOver(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 	snake1 := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
 	snake2 := NewSnake("p2", "Player 2", Point{X: 14, Y: 7})
-	room.AddPlayer(snake1)
-	room.AddPlayer(snake2)
+	room.AddPlayer(snake1, 4)
+	room.AddPlayer(snake2, 4)
 
 	if room.CheckGameOver() {
 		t.Error("expected CheckGameOver to be false with 2 alive players")
@@ -180,13 +180,13 @@ func TestRoom_CheckGameOver(t *testing.T) {
 }
 
 func TestRoom_GetAlivePlayers(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 	snake1 := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
 	snake2 := NewSnake("p2", "Player 2", Point{X: 14, Y: 7})
 	snake3 := NewSnake("p3", "Player 3", Point{X: 5, Y: 3})
-	room.AddPlayer(snake1)
-	room.AddPlayer(snake2)
-	room.AddPlayer(snake3)
+	room.AddPlayer(snake1, 4)
+	room.AddPlayer(snake2, 4)
+	room.AddPlayer(snake3, 4)
 
 	alive := room.GetAlivePlayers()
 	if len(alive) != 3 {
@@ -201,13 +201,13 @@ func TestRoom_GetAlivePlayers(t *testing.T) {
 }
 
 func TestRoom_GetPlayerCount(t *testing.T) {
-	room := NewRoom("test")
+	room := NewRoom("test", 20, 15)
 	if room.GetPlayerCount() != 0 {
 		t.Errorf("expected 0 players, got %d", room.GetPlayerCount())
 	}
 
 	snake := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
-	room.AddPlayer(snake)
+	room.AddPlayer(snake, 4)
 	if room.GetPlayerCount() != 1 {
 		t.Errorf("expected 1 player, got %d", room.GetPlayerCount())
 	}

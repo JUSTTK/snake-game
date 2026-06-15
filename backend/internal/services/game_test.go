@@ -1,6 +1,7 @@
 package services
 
 import (
+	"snake-game/internal/config"
 	"snake-game/internal/models"
 	"sync"
 	"testing"
@@ -8,11 +9,11 @@ import (
 )
 
 func newTestGameService() *GameService {
-	return NewGameService()
+	return NewGameService(config.Load())
 }
 
 func TestNewGameService(t *testing.T) {
-	gs := NewGameService()
+	gs := NewGameService(config.Load())
 	if gs == nil {
 		t.Fatal("expected non-nil GameService")
 	}
@@ -383,8 +384,8 @@ func TestGameService_findStartPosition(t *testing.T) {
 	}
 
 	pos1, dir1 := gs.findStartPosition(1)
-	if pos1.X != 14 || pos1.Y != 7 {
-		t.Errorf("expected player 1 start (14,7), got (%d,%d)", pos1.X, pos1.Y)
+	if pos1.X != 15 || pos1.Y != 7 {
+		t.Errorf("expected player 1 start (15,7), got (%d,%d)", pos1.X, pos1.Y)
 	}
 	if dir1 != models.Left {
 		t.Errorf("expected direction LEFT, got %s", dir1)

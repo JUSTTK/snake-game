@@ -49,7 +49,7 @@ func GenerateRandomFood(mapSize Point, occupiedPoints []Point) *Food {
 }
 
 func GenerateRandomFoodWithSnakeLen(mapSize Point, occupiedPoints []Point, maxSnakeLen int) *Food {
-	for {
+	for attempt := 0; attempt < 100; attempt++ {
 		pos := Point{
 			X: rand.Intn(mapSize.X),
 			Y: rand.Intn(mapSize.Y),
@@ -68,12 +68,15 @@ func GenerateRandomFoodWithSnakeLen(mapSize Point, occupiedPoints []Point, maxSn
 			return NewFood(pos, foodType)
 		}
 	}
+
+	pos := Point{
+		X: rand.Intn(mapSize.X),
+		Y: rand.Intn(mapSize.Y),
+	}
+	return NewFood(pos, NormalFood)
 }
 
 func GenerateRandomFoodAvoidProximity(mapSize Point, occupiedPoints []Point, snakeHeads []Point, minDistance int) *Food {
-	maxSnakeLen := 0
-	_ = maxSnakeLen
-
 	for attempt := 0; attempt < 50; attempt++ {
 		pos := Point{
 			X: rand.Intn(mapSize.X),

@@ -3,6 +3,7 @@ package services
 import (
 	"log"
 	"math/rand"
+	"snake-game/internal/config"
 	"snake-game/internal/models"
 	"sync"
 	"time"
@@ -24,15 +25,15 @@ type GameConfig struct {
 	MapHeight      int
 }
 
-func NewGameService() *GameService {
+func NewGameService(cfg *config.Config) *GameService {
 	return &GameService{
 		rooms:              make(map[string]*models.Room),
 		gameLoopCancellers: make(map[string]chan struct{}),
 		config: &GameConfig{
-			UpdateInterval: 150,
-			MaxPlayers:     4,
-			MapWidth:       20,
-			MapHeight:      15,
+			UpdateInterval: cfg.GameUpdateInterval,
+			MaxPlayers:     cfg.MaxPlayersPerRoom,
+			MapWidth:       cfg.MapWidth,
+			MapHeight:      cfg.MapHeight,
 		},
 	}
 }
@@ -52,7 +53,7 @@ func (gs *GameService) stopGameLoop(roomID string) {
 }
 
 func (gs *GameService) CreateRoom(name string) *models.Room {
-	room := models.NewRoom(name)
+	room := models.NewRoom(name, gs.config.MapWidth, gs.config.MapHeight)
 	gs.roomMutex.Lock()
 	gs.rooms[room.ID] = room
 	gs.roomMutex.Unlock()
@@ -67,7 +68,7 @@ func (gs *GameService) CreateRoomWithID(roomID, name string) *models.Room {
 		return room
 	}
 
-	room := models.NewRoomWithID(roomID, name)
+	room := models.NewRoomWithID(roomID, name, gs.config.MapWidth, gs.config.MapHeight)
 	gs.rooms[roomID] = room
 	return room
 }
@@ -97,7 +98,7 @@ func (gs *GameService) AddPlayerToRoom(roomID, playerID, playerName string) (*mo
 	snake := models.NewSnakeWithBody(playerID, playerName, body, direction)
 	snake.Color = playerColors[playerIndex%len(playerColors)]
 
-	if room.AddPlayer(snake) {
+	if room.AddPlayer(snake, gs.config.MaxPlayers) {
 		return snake, true
 	}
 
@@ -338,6 +339,10 @@ func (gs *GameService) checkCollisions(room *models.Room) {
 }
 
 func (gs *GameService) generateFood(room *models.Room) {
+	if len(room.Foods) >= 10 {
+		return
+	}
+
 	occupiedPoints := make([]models.Point, 0)
 	snakeHeads := make([]models.Point, 0)
 	maxSnakeLen := 0
@@ -394,11 +399,13 @@ func (gs *GameService) buildInitialBody(startPos models.Point, direction models.
 }
 
 func (gs *GameService) findStartPosition(playerIndex int) (models.Point, models.Direction) {
+	w := gs.config.MapWidth
+	h := gs.config.MapHeight
 	positions := []models.Point{
-		{X: 5, Y: 7},
-		{X: 14, Y: 7},
-		{X: 5, Y: 3},
-		{X: 14, Y: 11},
+		{X: w / 4, Y: h / 2},
+		{X: 3 * w / 4, Y: h / 2},
+		{X: w / 4, Y: h / 4},
+		{X: 3 * w / 4, Y: 3 * h / 4},
 	}
 	directions := []models.Direction{
 		models.Right,

@@ -27,27 +27,27 @@ type Room struct {
 	GameEndTime   *time.Time  `json:"game_end_time"`
 }
 
-func NewRoom(name string) *Room {
+func NewRoom(name string, mapWidth, mapHeight int) *Room {
 	return &Room{
 		ID:        uuid.New().String(),
 		Name:      name,
 		GameState: Waiting,
 		Players:   make([]*Snake, 0),
 		Foods:     make([]*Food, 0),
-		MapSize:   Point{X: 20, Y: 15},
+		MapSize:   Point{X: mapWidth, Y: mapHeight},
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 }
 
-func NewRoomWithID(id, name string) *Room {
-	room := NewRoom(name)
+func NewRoomWithID(id, name string, mapWidth, mapHeight int) *Room {
+	room := NewRoom(name, mapWidth, mapHeight)
 	room.ID = id
 	return room
 }
 
-func (r *Room) AddPlayer(snake *Snake) bool {
-	if len(r.Players) >= 4 { // 最多4个玩家
+func (r *Room) AddPlayer(snake *Snake, maxPlayers int) bool {
+	if len(r.Players) >= maxPlayers {
 		return false
 	}
 

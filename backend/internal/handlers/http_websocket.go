@@ -4,28 +4,67 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"snake-game/internal/config"
 	"snake-game/internal/models"
 	"snake-game/internal/services"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
-}
 
 type WebSocketMessage struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data,omitempty"`
 }
 
+const (
+	maxMovesPerSecond  = 10
+	stateChangeCooldown = 1 * time.Second
+)
+
 type clientConn struct {
-	conn *websocket.Conn
-	mu   sync.Mutex
+	conn            *websocket.Conn
+	mu              sync.Mutex
+	moveCount       int
+	moveWindowStart time.Time
+	lastStateChange time.Time
+}
+
+func (c *clientConn) checkMoveRate() bool {
+	now := time.Now()
+	if now.Sub(c.moveWindowStart) >= time.Second {
+		c.moveCount = 0
+		c.moveWindowStart = now
+	}
+	if c.moveCount >= maxMovesPerSecond {
+		return false
+	}
+	c.moveCount++
+	return true
+}
+
+func (c *clientConn) checkStateChangeCooldown() bool {
+	now := time.Now()
+	if now.Sub(c.lastStateChange) < stateChangeCooldown {
+		return false
+	}
+	c.lastStateChange = now
+	return true
+}
+
+func isOriginAllowed(r *http.Request, allowedOrigins []string) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	for _, allowed := range allowedOrigins {
+		if origin == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *clientConn) writeMessage(msgType int, data []byte) error {
@@ -38,12 +77,19 @@ type HTTPWebSocketHandler struct {
 	gameService     *services.GameService
 	roomConnections map[string][]*clientConn
 	mu              sync.RWMutex
+	upgrader        websocket.Upgrader
 }
 
-func NewHTTPWebSocketHandler(gameService *services.GameService) *HTTPWebSocketHandler {
+func NewHTTPWebSocketHandler(gameService *services.GameService, cfg *config.Config) *HTTPWebSocketHandler {
+	allowedOrigins := cfg.AllowedOrigins
 	handler := &HTTPWebSocketHandler{
 		gameService:     gameService,
 		roomConnections: make(map[string][]*clientConn),
+		upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				return isOriginAllowed(r, allowedOrigins)
+			},
+		},
 	}
 
 	gameService.SetStateUpdateCallback(func(roomID string) {
@@ -63,13 +109,16 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
-	ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	ws, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
 		return
 	}
 
-	client := &clientConn{conn: ws}
+	client := &clientConn{
+		conn:            ws,
+		moveWindowStart: time.Now(),
+	}
 	defer ws.Close()
 
 	defer func() {
@@ -141,6 +190,9 @@ func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, player
 		case "PING":
 			sendMessage(client, WebSocketMessage{Type: "PONG", Data: "pong"})
 		case "MOVE":
+			if !client.checkMoveRate() {
+				continue
+			}
 			if direction, ok := msg.Data.(string); ok {
 				log.Printf("Processing MOVE: %s", direction)
 				if h.gameService.MoveSnake(roomID, playerID, models.Direction(direction)) {
@@ -148,6 +200,9 @@ func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, player
 				}
 			}
 		case "START_GAME":
+			if !client.checkStateChangeCooldown() {
+				continue
+			}
 			log.Printf("Processing START_GAME")
 			if h.gameService.StartGame(roomID) {
 				log.Printf("Game started successfully, sending game state")
@@ -156,6 +211,9 @@ func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, player
 				log.Printf("Failed to start game (not enough players or invalid state)")
 			}
 		case "RESTART_GAME":
+			if !client.checkStateChangeCooldown() {
+				continue
+			}
 			log.Printf("Processing RESTART_GAME for room %s", roomID)
 			if h.gameService.RestartGame(roomID) {
 				log.Printf("Game restarted successfully, sending game state")
@@ -164,10 +222,16 @@ func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, player
 				log.Printf("Failed to restart game")
 			}
 		case "PAUSE":
+			if !client.checkStateChangeCooldown() {
+				continue
+			}
 			if h.gameService.PauseGame(roomID) {
 				h.sendGameStateToRoom(roomID)
 			}
 		case "RESUME":
+			if !client.checkStateChangeCooldown() {
+				continue
+			}
 			if h.gameService.ResumeGame(roomID) {
 				h.sendGameStateToRoom(roomID)
 			}

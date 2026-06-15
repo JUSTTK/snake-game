@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"snake-game/internal/config"
 	"snake-game/internal/services"
 	"testing"
 
@@ -15,7 +16,7 @@ import (
 func setupRouter() (*gin.Engine, *services.GameService) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	gs := services.NewGameService()
+	gs := services.NewGameService(config.Load())
 	roomHandler := NewRoomHandler(gs)
 
 	api := r.Group("/api")
@@ -181,8 +182,9 @@ func TestWebSocketMessage_Marshal(t *testing.T) {
 }
 
 func TestClientConn_WriteMessage_Concurrent(t *testing.T) {
+	testUpgrader := websocket.Upgrader{}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		upgrader.Upgrade(w, r, nil)
+		testUpgrader.Upgrade(w, r, nil)
 	}))
 	defer s.Close()
 
