@@ -19,7 +19,7 @@ func NewRoomHandler(gameService *services.GameService) *RoomHandler {
 
 // 获取所有房间列表
 func (rh *RoomHandler) GetRooms(c *gin.Context) {
-	rooms := rh.gameService.GetRooms()
+	rooms := rh.gameService.GetRoomsSnapshot()
 	c.JSON(http.StatusOK, gin.H{
 		"rooms": rooms,
 	})
@@ -37,8 +37,9 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 	}
 
 	room := rh.gameService.CreateRoom(req.Name)
+	snapshot, _ := rh.gameService.GetRoomSnapshot(room.ID)
 	c.JSON(http.StatusCreated, gin.H{
-		"room": room,
+		"room": snapshot,
 	})
 }
 

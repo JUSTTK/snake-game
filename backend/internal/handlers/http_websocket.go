@@ -20,16 +20,27 @@ type WebSocketMessage struct {
 }
 
 const (
-	maxMovesPerSecond  = 10
+	maxMovesPerSecond   = 10
 	stateChangeCooldown = 1 * time.Second
+	sendBufferSize      = 32
+	writeWait           = 10 * time.Second
+	pongWait            = 60 * time.Second
+	pingPeriod          = 30 * time.Second
 )
 
 type clientConn struct {
 	conn            *websocket.Conn
-	mu              sync.Mutex
 	moveCount       int
 	moveWindowStart time.Time
 	lastStateChange time.Time
+
+	// send is a buffered channel consumed by a single writePump goroutine, so
+	// writes to the underlying connection are serialized. A full buffer causes
+	// a frame to be dropped rather than blocking the broadcast loop (T0-C).
+	send      chan []byte
+	done      chan struct{}
+	closeOnce sync.Once
+	roomID    string
 }
 
 func (c *clientConn) checkMoveRate() bool {
@@ -67,10 +78,16 @@ func isOriginAllowed(r *http.Request, allowedOrigins []string) bool {
 	return false
 }
 
-func (c *clientConn) writeMessage(msgType int, data []byte) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.conn.WriteMessage(msgType, data)
+// enqueue hands a pre-marshaled message to the writePump. It is non-blocking: a
+// full buffer (slow/stuck client) drops the frame instead of stalling the
+// broadcast loop. The send channel is never closed, so enqueue is safe to call
+// concurrently with closeClient.
+func (c *clientConn) enqueue(data []byte) {
+	select {
+	case c.send <- data:
+	default:
+		log.Printf("client send buffer full, dropping message in room %s", c.roomID)
+	}
 }
 
 type HTTPWebSocketHandler struct {
@@ -115,60 +132,86 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
+	// Join the room BEFORE registering the connection so that a failed join
+	// (full room / recreate failure) never leaves a stale entry in
+	// roomConnections (T0-A).
+	_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
+	if !success {
+		if _, exists := h.gameService.GetRoom(roomID); !exists {
+			h.gameService.CreateRoomWithID(roomID, roomID)
+			_, success = h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
+		}
+		if !success {
+			writeDirect(ws, WebSocketMessage{Type: "ERROR", Data: "Failed to join room"})
+			ws.Close()
+			return
+		}
+	}
+
 	client := &clientConn{
 		conn:            ws,
+		send:            make(chan []byte, sendBufferSize),
+		done:            make(chan struct{}),
+		roomID:          roomID,
 		moveWindowStart: time.Now(),
 	}
-	defer ws.Close()
-
+	h.addClient(roomID, client)
+	// closeClient is deferred so EVERY return path (LEAVE, read error, panic)
+	// unregisters the connection — no leak (T0-A).
+	defer h.closeClient(roomID, client)
 	defer func() {
 		h.gameService.RemovePlayerFromRoom(roomID, playerID)
 		h.sendGameStateToRoom(roomID)
 	}()
 
-	h.mu.Lock()
-	h.roomConnections[roomID] = append(h.roomConnections[roomID], client)
-	h.mu.Unlock()
-
-	_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
-	if !success {
-		if _, exists := h.gameService.GetRoom(roomID); !exists {
-			h.gameService.CreateRoomWithID(roomID, roomID)
-			_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
-			if !success {
-				sendMessage(client, WebSocketMessage{
-					Type: "ERROR",
-					Data: "Failed to join room",
-				})
-				return
-			}
-		} else {
-			sendMessage(client, WebSocketMessage{
-				Type: "ERROR",
-				Data: "Room is full",
-			})
-			return
-		}
-	}
-
+	go h.writePump(client)
 	h.sendGameStateToRoom(roomID)
-
-	h.handleMessages(client, roomID, playerID)
-
-	h.mu.Lock()
-	for i, cc := range h.roomConnections[roomID] {
-		if cc == client {
-			h.roomConnections[roomID] = append(h.roomConnections[roomID][:i], h.roomConnections[roomID][i+1:]...)
-			break
-		}
-	}
-	if len(h.roomConnections[roomID]) == 0 {
-		delete(h.roomConnections, roomID)
-	}
-	h.mu.Unlock()
+	h.readPump(client, roomID, playerID)
 }
 
-func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, playerID string) {
+// writePump is the single writer for a client connection. It drains the send
+// channel, emits periodic pings, and applies a write deadline so a stuck peer
+// cannot block it forever (T0-C). Exits when done is closed, the send channel
+// is drained after close, or a write fails.
+func (h *HTTPWebSocketHandler) writePump(client *clientConn) {
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		client.conn.Close()
+	}()
+	for {
+		select {
+		case <-client.done:
+			return
+		case message, ok := <-client.send:
+			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				client.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+			if err := client.conn.WriteMessage(websocket.TextMessage, message); err != nil {
+				return
+			}
+		case <-ticker.C:
+			client.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
+// readPump reads inbound messages and applies a read deadline refreshed by
+// pong frames, so a silently-disconnected client is detected within pongWait
+// instead of blocking forever (T0-C). Rate limiting (T0-A's sibling fix) is
+// applied here.
+func (h *HTTPWebSocketHandler) readPump(client *clientConn, roomID, playerID string) {
+	client.conn.SetReadDeadline(time.Now().Add(pongWait))
+	client.conn.SetPongHandler(func(string) error {
+		client.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
 	for {
 		_, data, err := client.conn.ReadMessage()
 		if err != nil {
@@ -176,15 +219,11 @@ func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, player
 			return
 		}
 
-		log.Printf("Received message from %s in room %s: %s", playerID, roomID, string(data))
-
 		var msg WebSocketMessage
 		if err := json.Unmarshal(data, &msg); err != nil {
 			log.Printf("JSON unmarshal error: %v", err)
 			continue
 		}
-
-		log.Printf("Parsed message: Type=%s, Data=%v", msg.Type, msg.Data)
 
 		switch msg.Type {
 		case "PING":
@@ -194,7 +233,6 @@ func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, player
 				continue
 			}
 			if direction, ok := msg.Data.(string); ok {
-				log.Printf("Processing MOVE: %s", direction)
 				if h.gameService.MoveSnake(roomID, playerID, models.Direction(direction)) {
 					h.sendGameStateToRoom(roomID)
 				}
@@ -203,23 +241,15 @@ func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, player
 			if !client.checkStateChangeCooldown() {
 				continue
 			}
-			log.Printf("Processing START_GAME")
 			if h.gameService.StartGame(roomID) {
-				log.Printf("Game started successfully, sending game state")
 				h.sendGameStateToRoom(roomID)
-			} else {
-				log.Printf("Failed to start game (not enough players or invalid state)")
 			}
 		case "RESTART_GAME":
 			if !client.checkStateChangeCooldown() {
 				continue
 			}
-			log.Printf("Processing RESTART_GAME for room %s", roomID)
 			if h.gameService.RestartGame(roomID) {
-				log.Printf("Game restarted successfully, sending game state")
 				h.sendGameStateToRoom(roomID)
-			} else {
-				log.Printf("Failed to restart game")
 			}
 		case "PAUSE":
 			if !client.checkStateChangeCooldown() {
@@ -236,15 +266,46 @@ func (h *HTTPWebSocketHandler) handleMessages(client *clientConn, roomID, player
 				h.sendGameStateToRoom(roomID)
 			}
 		case "LEAVE":
-			h.gameService.RemovePlayerFromRoom(roomID, playerID)
-			h.sendGameStateToRoom(roomID)
+			// defer handles RemovePlayerFromRoom + state broadcast.
 			return
 		}
 	}
 }
 
+func (h *HTTPWebSocketHandler) addClient(roomID string, client *clientConn) {
+	h.mu.Lock()
+	h.roomConnections[roomID] = append(h.roomConnections[roomID], client)
+	h.mu.Unlock()
+}
+
+func (h *HTTPWebSocketHandler) removeClient(roomID string, client *clientConn) {
+	h.mu.Lock()
+	conns := h.roomConnections[roomID]
+	for i, cc := range conns {
+		if cc == client {
+			h.roomConnections[roomID] = append(conns[:i], conns[i+1:]...)
+			break
+		}
+	}
+	if len(h.roomConnections[roomID]) == 0 {
+		delete(h.roomConnections, roomID)
+	}
+	h.mu.Unlock()
+}
+
+// closeClient is idempotent (sync.Once) and unregisters+closes the connection.
+func (h *HTTPWebSocketHandler) closeClient(roomID string, client *clientConn) {
+	client.closeOnce.Do(func() {
+		close(client.done)
+		h.removeClient(roomID, client)
+		client.conn.Close()
+	})
+}
+
 func (h *HTTPWebSocketHandler) sendGameStateToRoom(roomID string) {
-	room, exists := h.gameService.GetRoom(roomID)
+	// Use a lock-held deep snapshot so JSON serialization does not race with
+	// the game loop mutating room.Players/Foods (T0-B).
+	room, exists := h.gameService.GetRoomSnapshot(roomID)
 	if !exists {
 		return
 	}
@@ -261,24 +322,42 @@ func (h *HTTPWebSocketHandler) sendGameStateToRoom(roomID string) {
 		},
 	}
 
-	h.mu.RLock()
-	connections := make([]*clientConn, len(h.roomConnections[roomID]))
-	copy(connections, h.roomConnections[roomID])
-	h.mu.RUnlock()
-
-	for _, client := range connections {
-		sendMessage(client, msg)
-	}
-}
-
-func sendMessage(client *clientConn, msg WebSocketMessage) {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		log.Printf("JSON marshal error: %v", err)
 		return
 	}
 
-	if err := client.writeMessage(websocket.TextMessage, data); err != nil {
-		log.Printf("WebSocket send error: %v", err)
+	h.mu.RLock()
+	connections := make([]*clientConn, len(h.roomConnections[roomID]))
+	copy(connections, h.roomConnections[roomID])
+	h.mu.RUnlock()
+
+	// Non-blocking enqueue: a slow client cannot stall the broadcast.
+	for _, client := range connections {
+		client.enqueue(data)
+	}
+}
+
+// sendMessage marshals and enqueues a message to a single client.
+func sendMessage(client *clientConn, msg WebSocketMessage) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		log.Printf("JSON marshal error: %v", err)
+		return
+	}
+	client.enqueue(data)
+}
+
+// writeDirect writes a single message synchronously with a deadline. Used only
+// for the pre-registration error path, where the writePump has not started yet.
+func writeDirect(ws *websocket.Conn, msg WebSocketMessage) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	ws.SetWriteDeadline(time.Now().Add(writeWait))
+	if err := ws.WriteMessage(websocket.TextMessage, data); err != nil {
+		log.Printf("WebSocket direct write error: %v", err)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"snake-game/internal/config"
 	"snake-game/internal/models"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -330,9 +331,9 @@ func TestGameService_GetRooms(t *testing.T) {
 
 func TestGameService_SetStateUpdateCallback(t *testing.T) {
 	gs := newTestGameService()
-	called := false
+	var called atomic.Bool
 	gs.SetStateUpdateCallback(func(roomID string) {
-		called = true
+		called.Store(true)
 	})
 
 	room := gs.CreateRoom("test")
@@ -343,7 +344,7 @@ func TestGameService_SetStateUpdateCallback(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	gs.stopGameLoop(room.ID)
 
-	if !called {
+	if !called.Load() {
 		t.Error("expected state update callback to be called during game loop")
 	}
 }
@@ -407,4 +408,130 @@ func TestGameService_buildInitialBody(t *testing.T) {
 	if bodyUp[0].Y != 10 || bodyUp[1].Y != 11 || bodyUp[2].Y != 12 {
 		t.Errorf("expected body Y sequence 10,11,12, got %d,%d,%d", bodyUp[0].Y, bodyUp[1].Y, bodyUp[2].Y)
 	}
+}
+
+// T0-D: a snake head landing on another snake's body segment must die (no pass-through).
+func TestGameService_CheckCollisions_BodyCollision(t *testing.T) {
+	gs := newTestGameService()
+	room := models.NewRoom("t", 20, 15)
+	snakeA := models.NewSnakeWithBody("a", "A", []models.Point{{5, 5}, {4, 5}, {3, 5}}, models.Right)
+	// B's head sits on A's neck (A.Body[1] = (4,5)).
+	snakeB := models.NewSnakeWithBody("b", "B", []models.Point{{4, 5}, {4, 6}, {4, 7}}, models.Up)
+	room.AddPlayer(snakeA, 4)
+	room.AddPlayer(snakeB, 4)
+
+	gs.checkCollisions(room)
+
+	if !snakeA.Alive {
+		t.Error("expected snake A to survive (B ran into A's body)")
+	}
+	if snakeB.Alive {
+		t.Error("expected snake B to die from hitting A's body")
+	}
+}
+
+// T0-E: head-to-head collision must kill both snakes.
+func TestGameService_CheckCollisions_HeadToHead(t *testing.T) {
+	gs := newTestGameService()
+	room := models.NewRoom("t", 20, 15)
+	snakeA := models.NewSnakeWithBody("a", "A", []models.Point{{5, 5}, {4, 5}, {3, 5}}, models.Right)
+	snakeB := models.NewSnakeWithBody("b", "B", []models.Point{{5, 5}, {6, 5}, {7, 5}}, models.Left)
+	room.AddPlayer(snakeA, 4)
+	room.AddPlayer(snakeB, 4)
+
+	gs.checkCollisions(room)
+
+	if snakeA.Alive {
+		t.Error("expected snake A to die in head-to-head collision")
+	}
+	if snakeB.Alive {
+		t.Error("expected snake B to die in head-to-head collision")
+	}
+}
+
+// T0-D/E: two snakes running parallel without overlap must both survive.
+func TestGameService_CheckCollisions_NoCollision(t *testing.T) {
+	gs := newTestGameService()
+	room := models.NewRoom("t", 20, 15)
+	snakeA := models.NewSnakeWithBody("a", "A", []models.Point{{5, 5}, {4, 5}, {3, 5}}, models.Right)
+	snakeB := models.NewSnakeWithBody("b", "B", []models.Point{{5, 8}, {4, 8}, {3, 8}}, models.Right)
+	room.AddPlayer(snakeA, 4)
+	room.AddPlayer(snakeB, 4)
+
+	gs.checkCollisions(room)
+
+	if !snakeA.Alive || !snakeB.Alive {
+		t.Error("expected both snakes to survive when not colliding")
+	}
+}
+
+// T0-F: a shielded snake stepping into a wall skips the move, consumes the shield,
+// stays in-bounds and alive; on the next tick (shield gone) it dies.
+func TestGameService_ShieldWallSkip(t *testing.T) {
+	gs := newTestGameService()
+	room := gs.CreateRoom("t")
+	// Snake at the right edge facing the wall.
+	snake := models.NewSnakeWithBody("a", "A", []models.Point{{19, 5}, {18, 5}, {17, 5}}, models.Right)
+	snake.Shielded = true
+	snake.ShieldTimer = 40
+	// Bystander so CheckGameOver does not end the game on the first tick.
+	bystander := models.NewSnakeWithBody("b", "B", []models.Point{{5, 10}, {4, 10}, {3, 10}}, models.Right)
+	room.Players = []*models.Snake{snake, bystander}
+	room.GameState = models.Playing
+
+	gs.updateGameState(room.ID)
+
+	if !snake.Alive {
+		t.Fatal("expected shielded snake to survive a wall step")
+	}
+	if snake.Shielded {
+		t.Error("expected shield to be consumed by the wall step")
+	}
+	head := snake.Body[0]
+	if head.X < 0 || head.X >= room.MapSize.X || head.Y < 0 || head.Y >= room.MapSize.Y {
+		t.Errorf("expected head to remain in-bounds, got (%d,%d)", head.X, head.Y)
+	}
+	if head.X != 19 {
+		t.Errorf("expected head to stay at edge x=19, got x=%d", head.X)
+	}
+
+	// Next tick: shield gone, stepping into the wall kills the snake.
+	gs.updateGameState(room.ID)
+	if snake.Alive {
+		t.Error("expected snake to die on the second wall step (shield already consumed)")
+	}
+
+	gs.stopGameLoop(room.ID)
+}
+
+// T0-G: a slowed snake moves only on even ticks; its SlowTimer ticks down every tick.
+func TestGameService_SlowFoodEffect(t *testing.T) {
+	gs := newTestGameService()
+	room := gs.CreateRoom("t")
+	snake := models.NewSnakeWithBody("a", "A", []models.Point{{10, 10}, {9, 10}, {8, 10}}, models.Right)
+	snake.Slowed = true
+	snake.SlowTimer = 30
+	bystander := models.NewSnakeWithBody("b", "B", []models.Point{{5, 5}, {4, 5}, {3, 5}}, models.Right)
+	room.Players = []*models.Snake{snake, bystander}
+	room.GameState = models.Playing
+
+	headBefore := snake.Body[0]
+
+	// First updateGameState: tickCount becomes 1 (odd) -> slowed snake skips Move.
+	gs.updateGameState(room.ID)
+	if snake.Body[0] != headBefore {
+		t.Errorf("expected slowed snake to not move on odd tick, head moved to (%d,%d)",
+			snake.Body[0].X, snake.Body[0].Y)
+	}
+	if snake.SlowTimer != 29 {
+		t.Errorf("expected SlowTimer to decrement to 29, got %d", snake.SlowTimer)
+	}
+
+	// Second updateGameState: tickCount becomes 2 (even) -> slowed snake moves.
+	gs.updateGameState(room.ID)
+	if snake.Body[0].X != headBefore.X+1 {
+		t.Errorf("expected slowed snake to move on even tick, head x=%d", snake.Body[0].X)
+	}
+
+	gs.stopGameLoop(room.ID)
 }

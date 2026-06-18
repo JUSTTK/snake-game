@@ -3,11 +3,14 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"snake-game/internal/config"
 	"snake-game/internal/services"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -181,7 +184,7 @@ func TestWebSocketMessage_Marshal(t *testing.T) {
 	}
 }
 
-func TestClientConn_WriteMessage_Concurrent(t *testing.T) {
+func TestClientConn_Enqueue_Concurrent(t *testing.T) {
 	testUpgrader := websocket.Upgrader{}
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		testUpgrader.Upgrade(w, r, nil)
@@ -195,18 +198,101 @@ func TestClientConn_WriteMessage_Concurrent(t *testing.T) {
 	}
 	defer ws.Close()
 
-	client := &clientConn{conn: ws}
+	client := &clientConn{
+		conn:   ws,
+		send:   make(chan []byte, sendBufferSize),
+		done:   make(chan struct{}),
+		roomID: "test",
+	}
 
+	// Concurrent enqueues must be safe; the writePump serializes actual writes.
 	done := make(chan bool, 2)
 	go func() {
-		client.writeMessage(websocket.TextMessage, []byte(`{"type":"PING"}`))
+		client.enqueue([]byte(`{"type":"PING"}`))
 		done <- true
 	}()
 	go func() {
-		client.writeMessage(websocket.TextMessage, []byte(`{"type":"PONG"}`))
+		client.enqueue([]byte(`{"type":"PONG"}`))
 		done <- true
 	}()
+	<-done
+	<-done
+}
 
-	<-done
-	<-done
+// T0-C: a full send buffer drops frames instead of blocking the caller.
+func TestClientConn_Enqueue_DropsWhenFull(t *testing.T) {
+	c := &clientConn{send: make(chan []byte, 2), done: make(chan struct{}), roomID: "r"}
+	c.enqueue([]byte("a"))
+	c.enqueue([]byte("b"))
+	c.enqueue([]byte("c")) // full -> dropped, no panic
+	c.enqueue([]byte("d")) // dropped
+
+	if len(c.send) != 2 {
+		t.Errorf("expected buffer to stay at capacity 2, got %d", len(c.send))
+	}
+}
+
+// T0-C: broadcast must not block when a registered client has a full buffer.
+func TestSendGameStateToRoom_DoesNotBlockOnFullBuffer(t *testing.T) {
+	gs := services.NewGameService(config.Load())
+	h := NewHTTPWebSocketHandler(gs, config.Load())
+	room := gs.CreateRoom("slow-room")
+
+	full := &clientConn{send: make(chan []byte, 1), done: make(chan struct{}), roomID: room.ID}
+	full.enqueue([]byte("x")) // fill buffer to capacity
+	h.addClient(room.ID, full)
+
+	done := make(chan struct{})
+	go func() {
+		h.sendGameStateToRoom(room.ID) // enqueue hits full buffer -> drops, returns
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("sendGameStateToRoom blocked on a full-buffer client")
+	}
+}
+
+// T0-A: joining a full room must not leave a stale entry in roomConnections.
+func TestHandleWebSocket_FullRoomDoesNotLeakConnection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	gs := services.NewGameService(config.Load())
+	h := NewHTTPWebSocketHandler(gs, config.Load())
+	r := gin.New()
+	r.GET("/ws", h.HandleWebSocket)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	roomID := "leak-room"
+	gs.CreateRoomWithID(roomID, roomID)
+	for i := 0; i < 4; i++ {
+		gs.AddPlayerToRoom(roomID, fmt.Sprintf("p%d", i), "P")
+	}
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?room_id=" + roomID +
+		"&player_id=p5&player_name=P5"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var msg WebSocketMessage
+	if err := conn.ReadJSON(&msg); err != nil {
+		t.Fatalf("expected ERROR message, got read error: %v", err)
+	}
+	if msg.Type != "ERROR" {
+		t.Errorf("expected ERROR message, got %s", msg.Type)
+	}
+
+	// Give the server a moment to finish its return path, then assert no leak.
+	time.Sleep(100 * time.Millisecond)
+	h.mu.RLock()
+	leaked := len(h.roomConnections[roomID])
+	h.mu.RUnlock()
+	if leaked != 0 {
+		t.Errorf("expected 0 leaked connections for full room, got %d", leaked)
+	}
 }

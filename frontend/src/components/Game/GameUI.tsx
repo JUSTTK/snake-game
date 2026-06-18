@@ -34,6 +34,15 @@ export const GameUI: React.FC = () => {
     soundManager.initialize();
   }, []);
 
+  // Disconnect the multiplayer WebSocket when leaving the game screen so the
+  // connection (and its heartbeat/reconnect timers) does not leak across
+  // route changes.
+  useEffect(() => {
+    return () => {
+      useGameStore.getState().disconnect();
+    };
+  }, []);
+
   useEffect(() => {
     soundManager.setBackgroundMusicActive(room?.game_state === 'PLAYING');
     return () => soundManager.setBackgroundMusicActive(false);

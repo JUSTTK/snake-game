@@ -16,6 +16,7 @@ type GameService struct {
 	stateUpdateCallback func(roomID string)
 	gameLoopCancellers  map[string]chan struct{}
 	loopMutex           sync.RWMutex
+	tickCount           int
 }
 
 type GameConfig struct {
@@ -79,6 +80,52 @@ func (gs *GameService) GetRoom(roomID string) (*models.Room, bool) {
 
 	room, exists := gs.rooms[roomID]
 	return room, exists
+}
+
+// GetRoomSnapshot returns a deep-copied room that is safe to read/serialize
+// without holding the service lock. Call this instead of GetRoom whenever the
+// caller will access room fields (Players/Foods) outside the lock — e.g. when
+// JSON-marshaling for broadcasts or REST responses — to avoid slice-tearing
+// races with the game loop.
+func (gs *GameService) GetRoomSnapshot(roomID string) (*models.Room, bool) {
+	gs.roomMutex.RLock()
+	defer gs.roomMutex.RUnlock()
+
+	room, exists := gs.rooms[roomID]
+	if !exists {
+		return nil, false
+	}
+	return cloneRoom(room), true
+}
+
+// GetRoomsSnapshot returns deep-copied snapshots of all rooms (safe to serialize).
+func (gs *GameService) GetRoomsSnapshot() []*models.Room {
+	gs.roomMutex.RLock()
+	defer gs.roomMutex.RUnlock()
+
+	rooms := make([]*models.Room, 0, len(gs.rooms))
+	for _, room := range gs.rooms {
+		rooms = append(rooms, cloneRoom(room))
+	}
+	return rooms
+}
+
+func cloneRoom(room *models.Room) *models.Room {
+	clone := *room
+	clone.Players = make([]*models.Snake, len(room.Players))
+	for i, s := range room.Players {
+		sc := *s
+		body := make([]models.Point, len(s.Body))
+		copy(body, s.Body)
+		sc.Body = body
+		clone.Players[i] = &sc
+	}
+	clone.Foods = make([]*models.Food, len(room.Foods))
+	for i, f := range room.Foods {
+		fc := *f
+		clone.Foods[i] = &fc
+	}
+	return &clone
 }
 
 var playerColors = []string{"#4ade80", "#38bdf8", "#f472b6", "#facc15"}
@@ -275,10 +322,26 @@ func (gs *GameService) updateGameState(roomID string) bool {
 		return false
 	}
 
+	gs.tickCount++
 	for _, snake := range room.Players {
-		if snake.Alive {
-			snake.Move()
+		if !snake.Alive {
+			continue
 		}
+		// Slowed snakes move every other tick; still tick their effect timers.
+		if snake.Slowed && gs.tickCount%2 == 1 {
+			snake.TickEffects()
+			continue
+		}
+		// A shielded snake that would step out of bounds skips the move this
+		// tick and consumes its shield (one-tick grace to turn away), instead
+		// of advancing into an illegal out-of-bounds cell.
+		if snake.Shielded && nextHeadOutOfBounds(snake, room.MapSize) {
+			snake.Shielded = false
+			snake.ShieldTimer = 0
+			snake.TickEffects()
+			continue
+		}
+		snake.Move()
 	}
 
 	gs.checkCollisions(room)
@@ -298,31 +361,67 @@ func (gs *GameService) updateGameState(roomID string) bool {
 	return gameOver
 }
 
+func nextHeadOutOfBounds(snake *models.Snake, mapSize models.Point) bool {
+	if len(snake.Body) == 0 {
+		return false
+	}
+	head := snake.Body[0]
+	switch snake.Direction {
+	case models.Up:
+		head.Y--
+	case models.Down:
+		head.Y++
+	case models.Left:
+		head.X--
+	case models.Right:
+		head.X++
+	}
+	return head.X < 0 || head.X >= mapSize.X || head.Y < 0 || head.Y >= mapSize.Y
+}
+
 func (gs *GameService) checkCollisions(room *models.Room) {
-	occupiedPoints := make(map[models.Point]bool)
+	// First pass: count heads and mark all non-head body segments across living snakes.
+	headCount := make(map[models.Point]int)
+	bodyPoints := make(map[models.Point]bool)
+	for _, snake := range room.Players {
+		if !snake.Alive {
+			continue
+		}
+		headCount[snake.Body[0]]++
+		for i := 1; i < len(snake.Body); i++ {
+			bodyPoints[snake.Body[i]] = true
+		}
+	}
 
 	for _, snake := range room.Players {
 		if !snake.Alive {
 			continue
 		}
-
 		head := snake.Body[0]
+
+		// Wall collision (unshielded snakes only — shielded wall steps are
+		// pre-empted in updateGameState before Move advances the head).
 		if head.X < 0 || head.X >= room.MapSize.X || head.Y < 0 || head.Y >= room.MapSize.Y {
 			snake.KillIfUnshielded()
 			continue
 		}
-		if snake.CheckSelfCollision() {
-			snake.KillIfUnshielded()
-			continue
-		}
-		if occupiedPoints[head] {
-			snake.KillIfUnshielded()
-			continue
-		}
 
-		occupiedPoints[head] = true
+		// Decide collision once so a shield is consumed at most once.
+		collided := false
+		if snake.CheckSelfCollision() {
+			collided = true
+		} else if headCount[head] >= 2 {
+			collided = true // head-to-head: both snakes die
+		} else if bodyPoints[head] {
+			collided = true // ran into another snake's body
+		}
+		if collided {
+			snake.KillIfUnshielded()
+			continue
+		}
 	}
 
+	// Only living snakes may eat.
 	for _, snake := range room.Players {
 		if !snake.Alive {
 			continue

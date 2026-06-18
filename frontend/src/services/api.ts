@@ -15,6 +15,10 @@ export class GameAPI {
   private reconnectTimer: number | null = null;
   private shouldReconnect = false;
 
+  // True after disconnect(); inbound messages (including async Blob reads that
+  // resolve after close) are dropped so they cannot revive the store.
+  private disposed = false;
+
   private currentRoomID = '';
   private currentPlayerID = '';
   private currentPlayerName = '';
@@ -51,10 +55,22 @@ export class GameAPI {
       this.currentPlayerID = playerID;
       this.currentPlayerName = playerName;
       this.shouldReconnect = true;
+      this.disposed = false;
 
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
+      }
+
+      // Close any leftover socket from a previous session/reconnect so its
+      // handlers stop firing and cannot leak or cross streams.
+      if (this.ws) {
+        this.ws.onopen = null;
+        this.ws.onerror = null;
+        this.ws.onclose = null;
+        this.ws.onmessage = null;
+        this.ws.close();
+        this.ws = null;
       }
 
       let hasOpened = false;
@@ -97,6 +113,9 @@ export class GameAPI {
       };
 
       this.ws.onmessage = (event) => {
+        if (this.disposed) {
+          return;
+        }
         this.resetHeartbeatTimeout();
 
         try {
@@ -104,6 +123,9 @@ export class GameAPI {
           if (event.data instanceof Blob) {
             const reader = new FileReader();
             reader.onload = () => {
+              if (this.disposed) {
+                return;
+              }
               try {
                 const message: WebSocketMessage = JSON.parse(reader.result as string);
                 if (this.gameStateCallback && message.type === 'GAME_STATE') {
@@ -214,6 +236,7 @@ export class GameAPI {
 
   disconnect() {
     this.shouldReconnect = false;
+    this.disposed = true;
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -223,6 +246,10 @@ export class GameAPI {
     this.stopHeartbeat();
 
     if (this.ws) {
+      this.ws.onopen = null;
+      this.ws.onerror = null;
+      this.ws.onclose = null;
+      this.ws.onmessage = null;
       this.ws.close(1000, '用户主动断开连接');
       this.ws = null;
     }
