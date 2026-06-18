@@ -414,9 +414,9 @@ func TestGameService_buildInitialBody(t *testing.T) {
 func TestGameService_CheckCollisions_BodyCollision(t *testing.T) {
 	gs := newTestGameService()
 	room := models.NewRoom("t", 20, 15)
-	snakeA := models.NewSnakeWithBody("a", "A", []models.Point{{5, 5}, {4, 5}, {3, 5}}, models.Right)
+	snakeA := models.NewSnakeWithBody("a", "A", []models.Point{{X: 5, Y: 5}, {X: 4, Y: 5}, {X: 3, Y: 5}}, models.Right)
 	// B's head sits on A's neck (A.Body[1] = (4,5)).
-	snakeB := models.NewSnakeWithBody("b", "B", []models.Point{{4, 5}, {4, 6}, {4, 7}}, models.Up)
+	snakeB := models.NewSnakeWithBody("b", "B", []models.Point{{X: 4, Y: 5}, {X: 4, Y: 6}, {X: 4, Y: 7}}, models.Up)
 	room.AddPlayer(snakeA, 4)
 	room.AddPlayer(snakeB, 4)
 
@@ -434,8 +434,8 @@ func TestGameService_CheckCollisions_BodyCollision(t *testing.T) {
 func TestGameService_CheckCollisions_HeadToHead(t *testing.T) {
 	gs := newTestGameService()
 	room := models.NewRoom("t", 20, 15)
-	snakeA := models.NewSnakeWithBody("a", "A", []models.Point{{5, 5}, {4, 5}, {3, 5}}, models.Right)
-	snakeB := models.NewSnakeWithBody("b", "B", []models.Point{{5, 5}, {6, 5}, {7, 5}}, models.Left)
+	snakeA := models.NewSnakeWithBody("a", "A", []models.Point{{X: 5, Y: 5}, {X: 4, Y: 5}, {X: 3, Y: 5}}, models.Right)
+	snakeB := models.NewSnakeWithBody("b", "B", []models.Point{{X: 5, Y: 5}, {X: 6, Y: 5}, {X: 7, Y: 5}}, models.Left)
 	room.AddPlayer(snakeA, 4)
 	room.AddPlayer(snakeB, 4)
 
@@ -453,8 +453,8 @@ func TestGameService_CheckCollisions_HeadToHead(t *testing.T) {
 func TestGameService_CheckCollisions_NoCollision(t *testing.T) {
 	gs := newTestGameService()
 	room := models.NewRoom("t", 20, 15)
-	snakeA := models.NewSnakeWithBody("a", "A", []models.Point{{5, 5}, {4, 5}, {3, 5}}, models.Right)
-	snakeB := models.NewSnakeWithBody("b", "B", []models.Point{{5, 8}, {4, 8}, {3, 8}}, models.Right)
+	snakeA := models.NewSnakeWithBody("a", "A", []models.Point{{X: 5, Y: 5}, {X: 4, Y: 5}, {X: 3, Y: 5}}, models.Right)
+	snakeB := models.NewSnakeWithBody("b", "B", []models.Point{{X: 5, Y: 8}, {X: 4, Y: 8}, {X: 3, Y: 8}}, models.Right)
 	room.AddPlayer(snakeA, 4)
 	room.AddPlayer(snakeB, 4)
 
@@ -471,11 +471,11 @@ func TestGameService_ShieldWallSkip(t *testing.T) {
 	gs := newTestGameService()
 	room := gs.CreateRoom("t")
 	// Snake at the right edge facing the wall.
-	snake := models.NewSnakeWithBody("a", "A", []models.Point{{19, 5}, {18, 5}, {17, 5}}, models.Right)
+	snake := models.NewSnakeWithBody("a", "A", []models.Point{{X: 19, Y: 5}, {X: 18, Y: 5}, {X: 17, Y: 5}}, models.Right)
 	snake.Shielded = true
 	snake.ShieldTimer = 40
 	// Bystander so CheckGameOver does not end the game on the first tick.
-	bystander := models.NewSnakeWithBody("b", "B", []models.Point{{5, 10}, {4, 10}, {3, 10}}, models.Right)
+	bystander := models.NewSnakeWithBody("b", "B", []models.Point{{X: 5, Y: 10}, {X: 4, Y: 10}, {X: 3, Y: 10}}, models.Right)
 	room.Players = []*models.Snake{snake, bystander}
 	room.GameState = models.Playing
 
@@ -508,10 +508,10 @@ func TestGameService_ShieldWallSkip(t *testing.T) {
 func TestGameService_SlowFoodEffect(t *testing.T) {
 	gs := newTestGameService()
 	room := gs.CreateRoom("t")
-	snake := models.NewSnakeWithBody("a", "A", []models.Point{{10, 10}, {9, 10}, {8, 10}}, models.Right)
+	snake := models.NewSnakeWithBody("a", "A", []models.Point{{X: 10, Y: 10}, {X: 9, Y: 10}, {X: 8, Y: 10}}, models.Right)
 	snake.Slowed = true
 	snake.SlowTimer = 30
-	bystander := models.NewSnakeWithBody("b", "B", []models.Point{{5, 5}, {4, 5}, {3, 5}}, models.Right)
+	bystander := models.NewSnakeWithBody("b", "B", []models.Point{{X: 5, Y: 5}, {X: 4, Y: 5}, {X: 3, Y: 5}}, models.Right)
 	room.Players = []*models.Snake{snake, bystander}
 	room.GameState = models.Playing
 
