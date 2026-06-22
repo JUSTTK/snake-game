@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useKeyPress } from '../../hooks/useKeyPress';
 import { soundManager } from '../../services/soundManager';
 import { useGameStore } from '../../store/gameStore';
@@ -36,10 +36,20 @@ export const GameUI: React.FC = () => {
 
   // Disconnect the multiplayer WebSocket when leaving the game screen so the
   // connection (and its heartbeat/reconnect timers) does not leak across
-  // route changes.
+  // route changes. The disconnect is deferred + cancellable because React 18
+  // StrictMode (dev) runs setup→cleanup→setup on mount: the synthetic cleanup
+  // schedules a timer that the immediate remount cancels, so only a genuine
+  // route-away unmount actually disconnects.
+  const disconnectTimer = useRef<number | null>(null);
   useEffect(() => {
+    if (disconnectTimer.current !== null) {
+      clearTimeout(disconnectTimer.current);
+      disconnectTimer.current = null;
+    }
     return () => {
-      useGameStore.getState().disconnect();
+      disconnectTimer.current = window.setTimeout(() => {
+        useGameStore.getState().disconnect();
+      }, 0);
     };
   }, []);
 
