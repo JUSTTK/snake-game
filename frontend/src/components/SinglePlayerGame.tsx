@@ -101,6 +101,13 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
   const [snake, setSnake] = useState<Snake>(createInitialSnake);
+  // Refs mirror the state so the game loop can compute the next state
+  // synchronously. This keeps side effects (sound/achievements/nested setState)
+  // OUT of state updaters — React StrictMode double-invokes updater functions,
+  // which would otherwise double-fire every side effect.
+  const snakeRef = useRef<Snake>(createInitialSnake());
+  const scoreRef = useRef(0);
+  const highScoreRef = useRef(0);
   const [food, setFood] = useState<Food>({
     pos: { x: 15, y: 10 },
     type: 'NORMAL',
@@ -183,159 +190,142 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   );
 
   const moveSnake = useCallback(() => {
-    setSnake((prevSnake) => {
-      const activeDirection = queuedDirectionRef.current;
-      directionRef.current = activeDirection;
-      const head = { ...prevSnake.body[0] };
+    const prevSnake = snakeRef.current;
+    const activeDirection = queuedDirectionRef.current;
+    directionRef.current = activeDirection;
+    const head = { ...prevSnake.body[0] };
 
-      switch (activeDirection) {
-        case 'UP':
-          head.y -= 1;
-          break;
-        case 'DOWN':
-          head.y += 1;
-          break;
-        case 'LEFT':
-          head.x -= 1;
-          break;
-        case 'RIGHT':
-          head.x += 1;
-          break;
+    switch (activeDirection) {
+      case 'UP':
+        head.y -= 1;
+        break;
+      case 'DOWN':
+        head.y += 1;
+        break;
+      case 'LEFT':
+        head.x -= 1;
+        break;
+      case 'RIGHT':
+        head.x += 1;
+        break;
+    }
+
+    const willGrow = head.x === food.pos.x && head.y === food.pos.y;
+    const collisionSegments = willGrow ? prevSnake.body : prevSnake.body.slice(0, -1);
+
+    const outOfBounds = head.x < 0 || head.x >= width || head.y < 0 || head.y >= height;
+    const hitBody = collisionSegments.some((segment) => segment.x === head.x && segment.y === head.y);
+
+    if (outOfBounds || hitBody) {
+      if (prevSnake.shielded) {
+        const nextSnake: Snake = {
+          ...prevSnake,
+          direction: activeDirection,
+          shielded: false,
+          shieldTimer: 0,
+        };
+        snakeRef.current = nextSnake;
+        setSnake(nextSnake);
+        soundManager.play('eat_special');
+        updateAchievementState({ shieldUsed: (useSettingsStore.getState().achievementState.shieldUsed ?? 0) + 1 });
+        return;
       }
+      soundManager.play('game_over');
+      setGameState('gameOver');
+      const achState = useSettingsStore.getState().achievementState;
+      updateAchievementState({
+        totalGamesPlayed: achState.totalGamesPlayed + 1,
+        totalDeaths: achState.totalDeaths + 1,
+        gamesWithoutDeath: 0,
+      });
+      return;
+    }
 
-      const willGrow = head.x === food.pos.x && head.y === food.pos.y;
-      const collisionSegments = willGrow ? prevSnake.body : prevSnake.body.slice(0, -1);
+    const nextBody = [head, ...prevSnake.body];
+    const nextSnake: Snake = {
+      ...prevSnake,
+      direction: activeDirection,
+      body: nextBody,
+    };
 
-      if (head.x < 0 || head.x >= width || head.y < 0 || head.y >= height) {
-        if (prevSnake.shielded) {
-          const nextSnake: Snake = {
-            ...prevSnake,
-            direction: activeDirection,
-            shielded: false,
-            shieldTimer: 0,
-          };
-          soundManager.play('eat_special');
-          updateAchievementState({ shieldUsed: (useSettingsStore.getState().achievementState.shieldUsed ?? 0) + 1 });
-          return nextSnake;
-        }
-        soundManager.play('game_over');
-        setGameState('gameOver');
-        const achState = useSettingsStore.getState().achievementState;
-        updateAchievementState({
-          totalGamesPlayed: achState.totalGamesPlayed + 1,
-          totalDeaths: achState.totalDeaths + 1,
-          gamesWithoutDeath: 0,
-        });
-        return prevSnake;
-      }
+    if (willGrow) {
+      const isSpecial = food.type !== 'NORMAL';
+      soundManager.play(isSpecial ? 'eat_special' : 'eat_normal');
 
-      if (collisionSegments.some((segment) => segment.x === head.x && segment.y === head.y)) {
-        if (prevSnake.shielded) {
-          const nextSnake: Snake = {
-            ...prevSnake,
-            direction: activeDirection,
-            shielded: false,
-            shieldTimer: 0,
-          };
-          soundManager.play('eat_special');
-          updateAchievementState({ shieldUsed: (useSettingsStore.getState().achievementState.shieldUsed ?? 0) + 1 });
-          return nextSnake;
-        }
-        soundManager.play('game_over');
-        setGameState('gameOver');
-        const achState = useSettingsStore.getState().achievementState;
-        updateAchievementState({
-          totalGamesPlayed: achState.totalGamesPlayed + 1,
-          totalDeaths: achState.totalDeaths + 1,
-          gamesWithoutDeath: 0,
-        });
-        return prevSnake;
-      }
+      const config = FOOD_CONFIG[food.type];
+      const nextScore = scoreRef.current + config.score;
+      scoreRef.current = nextScore;
+      setScore(nextScore);
 
-      const nextBody = [head, ...prevSnake.body];
-      const nextSnake: Snake = {
-        ...prevSnake,
-        direction: activeDirection,
-        body: nextBody,
-      };
+      const newHigh = Math.max(highScoreRef.current, nextScore);
+      highScoreRef.current = newHigh;
+      setHighScore(newHigh);
+      updateAchievementState({ highScore: newHigh });
 
-      if (willGrow) {
-        const isSpecial = food.type !== 'NORMAL';
-        soundManager.play(isSpecial ? 'eat_special' : 'eat_normal');
+      const achState = useSettingsStore.getState().achievementState;
+      const foodUpdate: Record<string, number> = { totalFoodEaten: achState.totalFoodEaten + 1 };
 
-        const config = FOOD_CONFIG[food.type];
-        setScore((prevScore) => {
-          const nextScore = prevScore + config.score;
-          setHighScore((prevHighScore) => {
-            const newHigh = Math.max(prevHighScore, nextScore);
-            updateAchievementState({ highScore: newHigh });
-            return newHigh;
-          });
-          return nextScore;
-        });
-
-        const achState = useSettingsStore.getState().achievementState;
-        const foodUpdate: Record<string, number> = { totalFoodEaten: achState.totalFoodEaten + 1 };
-
-        switch (food.type) {
-          case 'SHIELD':
-            nextSnake.shielded = true;
-            nextSnake.shieldTimer = SHIELD_DURATION;
-            break;
-          case 'SLOW':
-            nextSnake.slowed = true;
-            nextSnake.slowTimer = SLOW_DURATION;
-            foodUpdate.slowFoodEaten = achState.slowFoodEaten + 1;
-            break;
-          case 'SHRINK':
-            if (nextSnake.body.length > 3) {
-              const removeCount = Math.max(1, Math.floor(nextSnake.body.length / 3));
-              const minLen = 3;
-              const actualRemove = Math.min(removeCount, nextSnake.body.length - minLen);
-              if (actualRemove > 0) {
-                nextSnake.body = nextSnake.body.slice(0, nextSnake.body.length - actualRemove);
-              }
+      switch (food.type) {
+        case 'SHIELD':
+          nextSnake.shielded = true;
+          nextSnake.shieldTimer = SHIELD_DURATION;
+          break;
+        case 'SLOW':
+          nextSnake.slowed = true;
+          nextSnake.slowTimer = SLOW_DURATION;
+          foodUpdate.slowFoodEaten = achState.slowFoodEaten + 1;
+          break;
+        case 'SHRINK':
+          if (nextSnake.body.length > 3) {
+            const removeCount = Math.max(1, Math.floor(nextSnake.body.length / 3));
+            const minLen = 3;
+            const actualRemove = Math.min(removeCount, nextSnake.body.length - minLen);
+            if (actualRemove > 0) {
+              nextSnake.body = nextSnake.body.slice(0, nextSnake.body.length - actualRemove);
             }
-            foodUpdate.shrinkFoodEaten = achState.shrinkFoodEaten + 1;
-            break;
-          case 'SPECIAL':
-            foodUpdate.specialFoodEaten = achState.specialFoodEaten + 1;
-            break;
-        }
-
-        updateAchievementState(foodUpdate);
-
-        const newBodyLen = nextSnake.body.length;
-        const achState2 = useSettingsStore.getState().achievementState;
-        if (newBodyLen > achState2.longestSnake) {
-          updateAchievementState({ longestSnake: newBodyLen });
-        }
-
-        setFood(generateFood(nextBody, nextSnake.body.length));
-      } else {
-        soundManager.playMoveTick();
-        nextSnake.body.pop();
+          }
+          foodUpdate.shrinkFoodEaten = achState.shrinkFoodEaten + 1;
+          break;
+        case 'SPECIAL':
+          foodUpdate.specialFoodEaten = achState.specialFoodEaten + 1;
+          break;
       }
 
-      if ((nextSnake.shieldTimer ?? 0) > 0) {
-        nextSnake.shieldTimer = (nextSnake.shieldTimer ?? 0) - 1;
-        if (nextSnake.shieldTimer <= 0) {
-          nextSnake.shielded = false;
-        }
-      }
-      if ((nextSnake.slowTimer ?? 0) > 0) {
-        nextSnake.slowTimer = (nextSnake.slowTimer ?? 0) - 1;
-        if (nextSnake.slowTimer <= 0) {
-          nextSnake.slowed = false;
-        }
+      updateAchievementState(foodUpdate);
+
+      const newBodyLen = nextSnake.body.length;
+      const achState2 = useSettingsStore.getState().achievementState;
+      if (newBodyLen > achState2.longestSnake) {
+        updateAchievementState({ longestSnake: newBodyLen });
       }
 
-      return nextSnake;
-    });
+      setFood(generateFood(nextBody, nextSnake.body.length));
+    } else {
+      soundManager.playMoveTick();
+      nextSnake.body.pop();
+    }
+
+    if ((nextSnake.shieldTimer ?? 0) > 0) {
+      nextSnake.shieldTimer = (nextSnake.shieldTimer ?? 0) - 1;
+      if (nextSnake.shieldTimer <= 0) {
+        nextSnake.shielded = false;
+      }
+    }
+    if ((nextSnake.slowTimer ?? 0) > 0) {
+      nextSnake.slowTimer = (nextSnake.slowTimer ?? 0) - 1;
+      if (nextSnake.slowTimer <= 0) {
+        nextSnake.slowed = false;
+      }
+    }
+
+    snakeRef.current = nextSnake;
+    setSnake(nextSnake);
   }, [food.pos.x, food.pos.y, food.type, generateFood, height, width, updateAchievementState]);
 
   const startGame = useCallback(() => {
     const initialSnake = createInitialSnake();
+    snakeRef.current = initialSnake;
+    scoreRef.current = 0;
     setGameState('playing');
     setScore(0);
     setSnake(initialSnake);
@@ -430,7 +420,9 @@ export const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({
   useEffect(() => {
     const savedHighScore = localStorage.getItem('snakeHighScore');
     if (savedHighScore) {
-      setHighScore(parseInt(savedHighScore, 10));
+      const parsed = parseInt(savedHighScore, 10);
+      highScoreRef.current = parsed;
+      setHighScore(parsed);
     }
   }, []);
 

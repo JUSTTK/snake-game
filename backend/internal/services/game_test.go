@@ -323,9 +323,43 @@ func TestGameService_GetRooms(t *testing.T) {
 	gs.CreateRoom("room1")
 	gs.CreateRoom("room2")
 
-	rooms := gs.GetRooms()
+	rooms := gs.GetRoomsSnapshot()
 	if len(rooms) != 2 {
 		t.Errorf("expected 2 rooms, got %d", len(rooms))
+	}
+}
+
+func TestGameService_SweepIdleRooms(t *testing.T) {
+	gs := newTestGameService()
+
+	// Empty room that was just created — must survive the sweep.
+	fresh := gs.CreateRoom("fresh")
+
+	// Empty room idle beyond the TTL — must be removed.
+	stale := gs.CreateRoom("stale")
+	gs.roomMutex.RLock()
+	gs.rooms[stale.ID].UpdatedAt = time.Now().Add(-2 * idleRoomTTL)
+	gs.roomMutex.RUnlock()
+
+	// Room with players, even if idle — must survive the sweep.
+	occupied := gs.CreateRoom("occupied")
+	gs.AddPlayerToRoom(occupied.ID, "p1", "Player 1")
+	gs.roomMutex.RLock()
+	gs.rooms[occupied.ID].UpdatedAt = time.Now().Add(-2 * idleRoomTTL)
+	gs.roomMutex.RUnlock()
+
+	removed := gs.SweepIdleRooms()
+	if removed != 1 {
+		t.Errorf("expected 1 room removed, got %d", removed)
+	}
+	if _, exists := gs.GetRoom(stale.ID); exists {
+		t.Error("expected stale room to be removed")
+	}
+	if _, exists := gs.GetRoom(fresh.ID); !exists {
+		t.Error("expected fresh room to be kept")
+	}
+	if _, exists := gs.GetRoom(occupied.ID); !exists {
+		t.Error("expected occupied room to be kept")
 	}
 }
 
