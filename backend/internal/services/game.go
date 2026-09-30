@@ -16,7 +16,11 @@ type GameService struct {
 	stateUpdateCallback func(roomID string)
 	gameLoopCancellers  map[string]chan struct{}
 	loopMutex           sync.RWMutex
-	tickCount           int
+	// tickCounts is a per-room tick counter. Slowed snakes move every other
+	// tick based on their own room's parity — a shared counter would break
+	// that parity once multiple rooms tick concurrently.
+	tickCounts  map[string]int
+	janitorStop chan struct{}
 }
 
 type GameConfig struct {
@@ -27,9 +31,11 @@ type GameConfig struct {
 }
 
 func NewGameService(cfg *config.Config) *GameService {
-	return &GameService{
+	gs := &GameService{
 		rooms:              make(map[string]*models.Room),
 		gameLoopCancellers: make(map[string]chan struct{}),
+		tickCounts:         make(map[string]int),
+		janitorStop:        make(chan struct{}),
 		config: &GameConfig{
 			UpdateInterval: cfg.GameUpdateInterval,
 			MaxPlayers:     cfg.MaxPlayersPerRoom,
@@ -37,6 +43,8 @@ func NewGameService(cfg *config.Config) *GameService {
 			MapHeight:      cfg.MapHeight,
 		},
 	}
+	go gs.runRoomJanitor()
+	return gs
 }
 
 func (gs *GameService) SetStateUpdateCallback(callback func(roomID string)) {
@@ -161,8 +169,50 @@ func (gs *GameService) RemovePlayerFromRoom(roomID, playerID string) {
 		if len(room.Players) == 0 {
 			gs.stopGameLoop(roomID)
 			delete(gs.rooms, roomID)
+			delete(gs.tickCounts, roomID)
 		}
 	}
+}
+
+const (
+	// idleRoomTTL is how long a room with no players is kept before the
+	// janitor removes it. REST-created rooms that nobody ever joins via
+	// WebSocket would otherwise leak.
+	idleRoomTTL     = 10 * time.Minute
+	roomSweepPeriod = 1 * time.Minute
+)
+
+// runRoomJanitor periodically sweeps rooms that have been empty for longer
+// than idleRoomTTL. Runs for the lifetime of the service.
+func (gs *GameService) runRoomJanitor() {
+	ticker := time.NewTicker(roomSweepPeriod)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			gs.SweepIdleRooms()
+		case <-gs.janitorStop:
+			return
+		}
+	}
+}
+
+// SweepIdleRooms deletes rooms with no players whose last update is older
+// than idleRoomTTL. Returns the number of rooms removed.
+func (gs *GameService) SweepIdleRooms() int {
+	gs.roomMutex.Lock()
+	defer gs.roomMutex.Unlock()
+
+	removed := 0
+	for roomID, room := range gs.rooms {
+		if len(room.Players) == 0 && time.Since(room.UpdatedAt) > idleRoomTTL {
+			gs.stopGameLoop(roomID)
+			delete(gs.rooms, roomID)
+			delete(gs.tickCounts, roomID)
+			removed++
+		}
+	}
+	return removed
 }
 
 func (gs *GameService) MoveSnake(roomID, playerID string, direction models.Direction) bool {
@@ -281,6 +331,7 @@ func (gs *GameService) RestartGame(roomID string) bool {
 	room.GameStartTime = nil
 	room.GameEndTime = nil
 	room.Foods = make([]*models.Food, 0)
+	gs.tickCounts[roomID] = 0
 
 	for i, snake := range room.Players {
 		startPos, direction := gs.findStartPosition(i)
@@ -322,13 +373,14 @@ func (gs *GameService) updateGameState(roomID string) bool {
 		return false
 	}
 
-	gs.tickCount++
+	gs.tickCounts[roomID]++
+	tick := gs.tickCounts[roomID]
 	for _, snake := range room.Players {
 		if !snake.Alive {
 			continue
 		}
 		// Slowed snakes move every other tick; still tick their effect timers.
-		if snake.Slowed && gs.tickCount%2 == 1 {
+		if snake.Slowed && tick%2 == 1 {
 			snake.TickEffects()
 			continue
 		}
@@ -517,15 +569,4 @@ func (gs *GameService) findStartPosition(playerIndex int) (models.Point, models.
 		playerIndex = len(positions) - 1
 	}
 	return positions[playerIndex], directions[playerIndex]
-}
-
-func (gs *GameService) GetRooms() []*models.Room {
-	gs.roomMutex.RLock()
-	defer gs.roomMutex.RUnlock()
-
-	rooms := make([]*models.Room, 0, len(gs.rooms))
-	for _, room := range gs.rooms {
-		rooms = append(rooms, room)
-	}
-	return rooms
 }

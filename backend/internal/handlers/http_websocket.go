@@ -26,6 +26,7 @@ const (
 	writeWait           = 10 * time.Second
 	pongWait            = 60 * time.Second
 	pingPeriod          = 30 * time.Second
+	maxMessageSize      = 4096 // inbound frames larger than this are rejected (DoS guard)
 )
 
 type clientConn struct {
@@ -206,6 +207,7 @@ func (h *HTTPWebSocketHandler) writePump(client *clientConn) {
 // instead of blocking forever (T0-C). Rate limiting (T0-A's sibling fix) is
 // applied here.
 func (h *HTTPWebSocketHandler) readPump(client *clientConn, roomID, playerID string) {
+	client.conn.SetReadLimit(maxMessageSize)
 	client.conn.SetReadDeadline(time.Now().Add(pongWait))
 	client.conn.SetPongHandler(func(string) error {
 		client.conn.SetReadDeadline(time.Now().Add(pongWait))
