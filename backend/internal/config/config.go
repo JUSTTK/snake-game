@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -18,10 +19,10 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		ServerPort:         getEnv("SERVER_PORT", "8081"),
-		GameUpdateInterval: getEnvAsInt("GAME_UPDATE_INTERVAL", 150),
-		MaxPlayersPerRoom:  getEnvAsInt("MAX_PLAYERS_PER_ROOM", 4),
-		MapWidth:           getEnvAsInt("MAP_WIDTH", 20),
-		MapHeight:          getEnvAsInt("MAP_HEIGHT", 15),
+		GameUpdateInterval: getEnvAsPositiveInt("GAME_UPDATE_INTERVAL", 150),
+		MaxPlayersPerRoom:  getEnvAsPositiveInt("MAX_PLAYERS_PER_ROOM", 4),
+		MapWidth:           getEnvAsPositiveInt("MAP_WIDTH", 20),
+		MapHeight:          getEnvAsPositiveInt("MAP_HEIGHT", 15),
 		AllowedOrigins:     getEnvAsSlice("ALLOWED_ORIGINS", []string{
 			"http://localhost:5173",
 			"http://localhost:8081",
@@ -53,11 +54,19 @@ func getEnvAsSlice(key string, defaultValue []string) []string {
 	return defaultValue
 }
 
-func getEnvAsInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
+// getEnvAsPositiveInt only accepts values greater than zero. Zero and negative
+// values reach panics further down (time.NewTicker(0) in the game loop,
+// rand.Intn(0) when spawning food), so a misconfigured environment variable
+// falls back to the default with a log line instead of crashing the server.
+func getEnvAsPositiveInt(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
 	}
-	return defaultValue
+	intValue, err := strconv.Atoi(value)
+	if err != nil || intValue <= 0 {
+		log.Printf("Invalid %s=%q, using default %d", key, value, defaultValue)
+		return defaultValue
+	}
+	return intValue
 }

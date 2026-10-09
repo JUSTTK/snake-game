@@ -36,7 +36,6 @@ func newE2EServer(t *testing.T) *httptest.Server {
 	{
 		rooms.GET("", roomHandler.GetRooms)
 		rooms.POST("", roomHandler.CreateRoom)
-		rooms.POST("/:id/join", roomHandler.JoinRoom)
 	}
 	router.GET("/ws", webSocketHandler.HandleWebSocket)
 
@@ -88,20 +87,41 @@ func TestBackendE2EHealthAndRoomLifecycle(t *testing.T) {
 		t.Fatalf("expected room id in response, got %v", room["id"])
 	}
 
-	joinPayload := bytes.NewBufferString(`{"player_id":"player-1","player_name":"E2E Player"}`)
-	resp, err = http.Post(server.URL+"/api/rooms/"+roomID+"/join", "application/json", joinPayload)
+	// Players join over the WebSocket. The REST join endpoint was removed: it
+	// added a snake with no connection behind it, which leaked the room forever.
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/ws"
+	query := url.Values{}
+	query.Set("room_id", roomID)
+	query.Set("player_id", "player-1")
+	query.Set("player_name", "E2E Player")
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"?"+query.Encode(), nil)
 	if err != nil {
-		t.Fatalf("join room request failed: %v", err)
+		t.Fatalf("websocket dial failed: %v", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("expected join room status 200, got %d", resp.StatusCode)
+	defer conn.Close()
+
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("failed to set websocket read deadline: %v", err)
 	}
-	joined := decodeJSON(t, resp)
-	if joined["message"] != "Successfully joined room" {
-		t.Fatalf("expected join success message, got %v", joined["message"])
+	var state struct {
+		Type string `json:"type"`
+		Data struct {
+			RoomID      string `json:"room_id"`
+			PlayerCount int    `json:"player_count"`
+		} `json:"data"`
 	}
-	if _, ok := joined["snake"].(map[string]interface{}); !ok {
-		t.Fatalf("expected snake object in join response, got %v", joined["snake"])
+	if err := conn.ReadJSON(&state); err != nil {
+		t.Fatalf("failed to read initial websocket message: %v", err)
+	}
+	if state.Type != "GAME_STATE" {
+		t.Fatalf("expected initial GAME_STATE message, got %s", state.Type)
+	}
+	if state.Data.PlayerCount != 1 {
+		t.Fatalf("expected 1 player in room %s, got %d", roomID, state.Data.PlayerCount)
+	}
+	if state.Data.RoomID != roomID {
+		t.Fatalf("expected room id %s, got %s", roomID, state.Data.RoomID)
 	}
 
 	resp, err = http.Get(server.URL + "/api/rooms")

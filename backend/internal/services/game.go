@@ -19,8 +19,9 @@ type GameService struct {
 	// tickCounts is a per-room tick counter. Slowed snakes move every other
 	// tick based on their own room's parity — a shared counter would break
 	// that parity once multiple rooms tick concurrently.
-	tickCounts  map[string]int
-	janitorStop chan struct{}
+	tickCounts   map[string]int
+	janitorStop  chan struct{}
+	shutdownOnce sync.Once
 }
 
 type GameConfig struct {
@@ -147,6 +148,12 @@ func (gs *GameService) AddPlayerToRoom(roomID, playerID, playerName string) (*mo
 		return nil, false
 	}
 
+	// A player_id must map to at most one snake. Without this, a reconnect (or a
+	// second connection with the same id) occupies two of the room's slots and
+	// later removal by player_id becomes ambiguous. Dropping the stale snake
+	// first also frees its color index for reuse.
+	room.RemovePlayer(playerID)
+
 	playerIndex := len(room.Players)
 	startPos, direction := gs.findStartPosition(playerIndex)
 	body := gs.buildInitialBody(startPos, direction)
@@ -160,12 +167,17 @@ func (gs *GameService) AddPlayerToRoom(roomID, playerID, playerName string) (*mo
 	return nil, false
 }
 
-func (gs *GameService) RemovePlayerFromRoom(roomID, playerID string) {
+// RemoveSnakeFromRoom removes the one snake owned by a connection. Callers pass
+// the snake ID rather than the player_id: a reconnected client has already
+// replaced the snake its player_id pointed at, and the abandoned socket can
+// linger up to pongWait before its read fails — removing by player_id there
+// would delete the replacement instead of the abandoned snake.
+func (gs *GameService) RemoveSnakeFromRoom(roomID, snakeID string) {
 	gs.roomMutex.Lock()
 	defer gs.roomMutex.Unlock()
 
 	if room, exists := gs.rooms[roomID]; exists {
-		room.RemovePlayer(playerID)
+		room.RemoveSnakeByID(snakeID)
 		if len(room.Players) == 0 {
 			gs.stopGameLoop(roomID)
 			delete(gs.rooms, roomID)
@@ -213,6 +225,28 @@ func (gs *GameService) SweepIdleRooms() int {
 		}
 	}
 	return removed
+}
+
+// Shutdown stops the janitor and every running game loop. Safe to call more
+// than once. Rooms are intentionally left in the map: the process is exiting.
+func (gs *GameService) Shutdown() {
+	gs.shutdownOnce.Do(func() {
+		close(gs.janitorStop)
+	})
+
+	// Collect under the lock, close after releasing it: stopGameLoop closes the
+	// same channels under loopMutex, so closing here must not race with it.
+	gs.loopMutex.Lock()
+	cancels := make([]chan struct{}, 0, len(gs.gameLoopCancellers))
+	for roomID, cancel := range gs.gameLoopCancellers {
+		cancels = append(cancels, cancel)
+		delete(gs.gameLoopCancellers, roomID)
+	}
+	gs.loopMutex.Unlock()
+
+	for _, cancel := range cancels {
+		close(cancel)
+	}
 }
 
 func (gs *GameService) MoveSnake(roomID, playerID string, direction models.Direction) bool {
@@ -347,13 +381,31 @@ func (gs *GameService) RestartGame(roomID string) bool {
 }
 
 func (gs *GameService) gameLoop(roomID string, cancel <-chan struct{}) {
-	ticker := time.NewTicker(time.Duration(gs.config.UpdateInterval) * time.Millisecond)
+	interval := time.Duration(gs.config.UpdateInterval) * time.Millisecond
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
+	lastTick := time.Now()
+	var lastWarn time.Time
 	for {
 		select {
 		case <-ticker.C:
+			start := time.Now()
+			// A time.Ticker drops ticks when the receiver falls behind, so a gap
+			// wider than one interval means this room is missing simulation
+			// ticks — slowed-snake parity and the effect timers drift with it.
+			gap := start.Sub(lastTick)
+			lastTick = start
+
 			gameOver := gs.updateGameState(roomID)
+			elapsed := time.Since(start)
+
+			if (elapsed > interval || gap > 2*interval) && time.Since(lastWarn) > 5*time.Second {
+				lastWarn = time.Now()
+				log.Printf("room %s game loop behind: tick took %v, %v since previous tick (interval %v)",
+					roomID, elapsed, gap, interval)
+			}
+
 			if gameOver {
 				gs.stopGameLoop(roomID)
 				return

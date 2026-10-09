@@ -28,7 +28,7 @@ func (rh *RoomHandler) GetRooms(c *gin.Context) {
 // 创建新房间
 func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 	var req struct {
-		Name string `json:"name" binding:"required"`
+		Name string `json:"name" binding:"required,max=32"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -40,30 +40,5 @@ func (rh *RoomHandler) CreateRoom(c *gin.Context) {
 	snapshot, _ := rh.gameService.GetRoomSnapshot(room.ID)
 	c.JSON(http.StatusCreated, gin.H{
 		"room": snapshot,
-	})
-}
-
-// 加入房间
-func (rh *RoomHandler) JoinRoom(c *gin.Context) {
-	roomID := c.Param("id")
-	var req struct {
-		PlayerID   string `json:"player_id" binding:"required"`
-		PlayerName string `json:"player_name" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	snake, success := rh.gameService.AddPlayerToRoom(roomID, req.PlayerID, req.PlayerName)
-	if !success {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to join room"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Successfully joined room",
-		"snake":   snake,
 	})
 }

@@ -127,13 +127,13 @@ func TestGameService_AddPlayerToRoom_RoomNotFound(t *testing.T) {
 	}
 }
 
-func TestGameService_RemovePlayerFromRoom(t *testing.T) {
+func TestGameService_RemoveSnakeFromRoom(t *testing.T) {
 	gs := newTestGameService()
 	room := gs.CreateRoom("test")
-	gs.AddPlayerToRoom(room.ID, "p1", "Player 1")
-	gs.AddPlayerToRoom(room.ID, "p2", "Player 2")
+	_, _ = gs.AddPlayerToRoom(room.ID, "p1", "Player 1")
+	p2, _ := gs.AddPlayerToRoom(room.ID, "p2", "Player 2")
 
-	gs.RemovePlayerFromRoom(room.ID, "p1")
+	gs.RemoveSnakeFromRoom(room.ID, p2.ID)
 
 	found, exists := gs.GetRoom(room.ID)
 	if !exists {
@@ -142,19 +142,92 @@ func TestGameService_RemovePlayerFromRoom(t *testing.T) {
 	if found.GetPlayerCount() != 1 {
 		t.Errorf("expected 1 player, got %d", found.GetPlayerCount())
 	}
+	if found.GetSnake("p1") == nil {
+		t.Error("expected p1 to remain in the room")
+	}
 }
 
-func TestGameService_RemovePlayerFromRoom_EmptyRoomCleanup(t *testing.T) {
+func TestGameService_RemoveSnakeFromRoom_EmptyRoomCleanup(t *testing.T) {
 	gs := newTestGameService()
 	room := gs.CreateRoom("test")
-	gs.AddPlayerToRoom(room.ID, "p1", "Player 1")
+	p1, _ := gs.AddPlayerToRoom(room.ID, "p1", "Player 1")
 
-	gs.RemovePlayerFromRoom(room.ID, "p1")
+	gs.RemoveSnakeFromRoom(room.ID, p1.ID)
 
 	_, exists := gs.GetRoom(room.ID)
 	if exists {
 		t.Error("expected empty room to be deleted")
 	}
+}
+
+// A reconnect replaces the snake its player_id pointed at; the abandoned
+// connection's cleanup must remove only its own snake, never the replacement.
+func TestGameService_RemoveSnakeFromRoom_KeepsReplacementSnake(t *testing.T) {
+	gs := newTestGameService()
+	room := gs.CreateRoom("test")
+	stale, _ := gs.AddPlayerToRoom(room.ID, "p1", "Player 1")
+	replacement, ok := gs.AddPlayerToRoom(room.ID, "p1", "Player 1")
+	if !ok {
+		t.Fatal("expected reconnect to succeed")
+	}
+	if replacement.ID == stale.ID {
+		t.Fatal("expected reconnect to create a new snake")
+	}
+
+	gs.RemoveSnakeFromRoom(room.ID, stale.ID)
+
+	found, exists := gs.GetRoom(room.ID)
+	if !exists {
+		t.Fatal("expected room to survive cleanup of a replaced snake")
+	}
+	if found.GetSnake("p1") == nil {
+		t.Error("expected the replacement snake to survive the abandoned connection's cleanup")
+	}
+	if found.GetPlayerCount() != 1 {
+		t.Errorf("expected 1 player, got %d", found.GetPlayerCount())
+	}
+}
+
+func TestGameService_AddPlayerToRoom_ReplacesSamePlayerID(t *testing.T) {
+	gs := newTestGameService()
+	room := gs.CreateRoom("test")
+	gs.AddPlayerToRoom(room.ID, "p1", "Player 1")
+	gs.AddPlayerToRoom(room.ID, "p2", "Player 2")
+
+	// Same player_id joins again (reconnect / second connection).
+	snake, ok := gs.AddPlayerToRoom(room.ID, "p1", "Player 1")
+	if !ok {
+		t.Fatal("expected re-join to succeed")
+	}
+
+	found, _ := gs.GetRoom(room.ID)
+	if found.GetPlayerCount() != 2 {
+		t.Errorf("expected 2 players (no duplicate), got %d", found.GetPlayerCount())
+	}
+	// The stale snake is gone, so GetSnake resolves to the new one.
+	if found.GetSnake("p1").ID != snake.ID {
+		t.Error("expected GetSnake to resolve to the replacement snake")
+	}
+}
+
+func TestGameService_Shutdown(t *testing.T) {
+	gs := newTestGameService()
+	room := gs.CreateRoom("test")
+	gs.AddPlayerToRoom(room.ID, "p1", "Player 1")
+	gs.AddPlayerToRoom(room.ID, "p2", "Player 2")
+	gs.StartGame(room.ID)
+
+	gs.Shutdown()
+
+	gs.loopMutex.RLock()
+	remaining := len(gs.gameLoopCancellers)
+	gs.loopMutex.RUnlock()
+	if remaining != 0 {
+		t.Errorf("expected all game loops stopped, got %d remaining", remaining)
+	}
+
+	// Idempotent: a second call (e.g. a repeated signal) must not panic.
+	gs.Shutdown()
 }
 
 func TestGameService_MoveSnake(t *testing.T) {
