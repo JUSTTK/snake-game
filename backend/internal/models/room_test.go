@@ -99,6 +99,27 @@ func TestRoom_RemovePlayer_NotFound(t *testing.T) {
 	}
 }
 
+func TestRoom_RemoveSnakeByID(t *testing.T) {
+	room := NewRoom("test", 20, 15)
+	snake1 := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})
+	snake2 := NewSnake("p2", "Player 2", Point{X: 14, Y: 7})
+	room.AddPlayer(snake1, 4)
+	room.AddPlayer(snake2, 4)
+
+	room.RemoveSnakeByID(snake1.ID)
+	if len(room.Players) != 1 {
+		t.Fatalf("expected 1 player after removal, got %d", len(room.Players))
+	}
+	if room.Players[0].ID != snake2.ID {
+		t.Error("expected the snake with the given ID to be removed")
+	}
+
+	room.RemoveSnakeByID("nonexistent")
+	if len(room.Players) != 1 {
+		t.Errorf("expected 1 player (nothing removed), got %d", len(room.Players))
+	}
+}
+
 func TestRoom_GetSnake(t *testing.T) {
 	room := NewRoom("test", 20, 15)
 	snake := NewSnake("p1", "Player 1", Point{X: 5, Y: 7})

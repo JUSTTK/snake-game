@@ -26,7 +26,6 @@ func setupRouter() (*gin.Engine, *services.GameService) {
 	{
 		api.GET("/rooms", roomHandler.GetRooms)
 		api.POST("/rooms", roomHandler.CreateRoom)
-		api.POST("/rooms/:id/join", roomHandler.JoinRoom)
 	}
 
 	return r, gs
@@ -101,70 +100,6 @@ func TestRoomHandler_CreateRoom_MissingName(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected status 400, got %d", w.Code)
-	}
-}
-
-func TestRoomHandler_JoinRoom(t *testing.T) {
-	r, gs := setupRouter()
-	room := gs.CreateRoom("test-room")
-
-	body, _ := json.Marshal(map[string]string{
-		"player_id":   "p1",
-		"player_name": "Player 1",
-	})
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/rooms/"+room.ID+"/join", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected status 200, got %d", w.Code)
-	}
-
-	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
-	if response["message"] != "Successfully joined room" {
-		t.Errorf("expected success message, got %v", response["message"])
-	}
-}
-
-func TestRoomHandler_JoinRoom_Full(t *testing.T) {
-	r, gs := setupRouter()
-	room := gs.CreateRoom("test-room")
-
-	for i := 0; i < 4; i++ {
-		pid := string(rune('1' + i))
-		gs.AddPlayerToRoom(room.ID, "p"+pid, "Player "+pid)
-	}
-
-	body, _ := json.Marshal(map[string]string{
-		"player_id":   "p5",
-		"player_name": "Player 5",
-	})
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/rooms/"+room.ID+"/join", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400 for full room, got %d", w.Code)
-	}
-}
-
-func TestRoomHandler_JoinRoom_MissingFields(t *testing.T) {
-	r, gs := setupRouter()
-	room := gs.CreateRoom("test-room")
-
-	body, _ := json.Marshal(map[string]string{
-		"player_id": "p1",
-	})
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("POST", "/api/rooms/"+room.ID+"/join", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	r.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("expected status 400 for missing fields, got %d", w.Code)
 	}
 }
 
@@ -251,6 +186,93 @@ func TestSendGameStateToRoom_DoesNotBlockOnFullBuffer(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("sendGameStateToRoom blocked on a full-buffer client")
+	}
+}
+
+// Oversized identifiers are rejected before the upgrade: room_id/player_id and
+// player_name are echoed in every GAME_STATE broadcast, so they are capped.
+func TestHandleWebSocket_RejectsOversizedParams(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	gs := services.NewGameService(config.Load())
+	h := NewHTTPWebSocketHandler(gs, config.Load())
+	r := gin.New()
+	r.GET("/ws", h.HandleWebSocket)
+
+	long := strings.Repeat("a", maxIDLen+1)
+	longName := strings.Repeat("a", maxPlayerNameRunes+1)
+
+	cases := []struct {
+		name  string
+		query string
+	}{
+		{"room_id too long", "room_id=" + long + "&player_id=p1&player_name=P1"},
+		{"player_id too long", "room_id=r&player_id=" + long + "&player_name=P1"},
+		{"player_name too long", "room_id=r&player_id=p1&player_name=" + longName},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req, _ := http.NewRequest("GET", "/ws?"+tc.query, nil)
+			r.ServeHTTP(w, req)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("expected status 400, got %d", w.Code)
+			}
+			if !strings.Contains(w.Body.String(), "at most") {
+				t.Errorf("expected the length-limit error, got %q", w.Body.String())
+			}
+		})
+	}
+}
+
+// Shutdown closes live WebSocket connections and clears the registry, so a
+// graceful server exit does not leave sockets hanging (http.Server.Shutdown
+// does not track hijacked connections).
+func TestHTTPWebSocketHandler_ShutdownClosesClients(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	gs := services.NewGameService(config.Load())
+	h := NewHTTPWebSocketHandler(gs, config.Load())
+	r := gin.New()
+	r.GET("/ws", h.HandleWebSocket)
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	roomID := "shutdown-room"
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?room_id=" + roomID +
+		"&player_id=p1&player_name=P1"
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	var initial WebSocketMessage
+	if err := conn.ReadJSON(&initial); err != nil {
+		t.Fatalf("expected initial GAME_STATE, got %v", err)
+	}
+
+	h.mu.RLock()
+	registered := len(h.roomConnections[roomID])
+	h.mu.RUnlock()
+	if registered != 1 {
+		t.Fatalf("expected 1 registered connection, got %d", registered)
+	}
+
+	h.Shutdown()
+
+	h.mu.RLock()
+	registered = len(h.roomConnections[roomID])
+	h.mu.RUnlock()
+	if registered != 0 {
+		t.Errorf("expected the registry to be cleared, got %d connections", registered)
+	}
+
+	// The server side of the socket is closed, so the client read must fail.
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Error("expected the client connection to be closed by Shutdown")
 	}
 }
 

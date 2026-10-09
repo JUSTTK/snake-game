@@ -9,6 +9,7 @@ import (
 	"snake-game/internal/services"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -27,6 +28,10 @@ const (
 	pongWait            = 60 * time.Second
 	pingPeriod          = 30 * time.Second
 	maxMessageSize      = 4096 // inbound frames larger than this are rejected (DoS guard)
+	// Client-supplied identifiers are echoed in every GAME_STATE broadcast, so
+	// they are capped rather than trusted.
+	maxIDLen           = 64
+	maxPlayerNameRunes = 32
 )
 
 type clientConn struct {
@@ -127,6 +132,15 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 		return
 	}
 
+	// All three caps count characters (runes), matching the maxLength the
+	// frontend puts on its inputs, so the UI and the server agree on the limit.
+	if utf8.RuneCountInString(roomID) > maxIDLen ||
+		utf8.RuneCountInString(playerID) > maxIDLen ||
+		utf8.RuneCountInString(playerName) > maxPlayerNameRunes {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "room_id and player_id must be at most 64 characters, player_name at most 32"})
+		return
+	}
+
 	ws, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
@@ -136,11 +150,11 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 	// Join the room BEFORE registering the connection so that a failed join
 	// (full room / recreate failure) never leaves a stale entry in
 	// roomConnections (T0-A).
-	_, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
+	snake, success := h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
 	if !success {
 		if _, exists := h.gameService.GetRoom(roomID); !exists {
 			h.gameService.CreateRoomWithID(roomID, roomID)
-			_, success = h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
+			snake, success = h.gameService.AddPlayerToRoom(roomID, playerID, playerName)
 		}
 		if !success {
 			writeDirect(ws, WebSocketMessage{Type: "ERROR", Data: "Failed to join room"})
@@ -160,8 +174,11 @@ func (h *HTTPWebSocketHandler) HandleWebSocket(c *gin.Context) {
 	// closeClient is deferred so EVERY return path (LEAVE, read error, panic)
 	// unregisters the connection — no leak (T0-A).
 	defer h.closeClient(roomID, client)
+	// Remove this connection's own snake by ID, never by player_id: an abandoned
+	// socket that reconnects has already replaced the snake its player_id
+	// pointed at, and this cleanup can run up to pongWait later.
 	defer func() {
-		h.gameService.RemovePlayerFromRoom(roomID, playerID)
+		h.gameService.RemoveSnakeFromRoom(roomID, snake.ID)
 		h.sendGameStateToRoom(roomID)
 	}()
 
@@ -234,11 +251,19 @@ func (h *HTTPWebSocketHandler) readPump(client *clientConn, roomID, playerID str
 			if !client.checkMoveRate() {
 				continue
 			}
-			if direction, ok := msg.Data.(string); ok {
-				if h.gameService.MoveSnake(roomID, playerID, models.Direction(direction)) {
-					h.sendGameStateToRoom(roomID)
-				}
+			raw, ok := msg.Data.(string)
+			if !ok {
+				continue
 			}
+			direction, ok := models.ParseDirection(raw)
+			if !ok {
+				continue
+			}
+			// Deliberately no immediate broadcast: MOVE only changes the heading,
+			// and the game loop broadcasts the resulting state every tick (<=150ms).
+			// Echoing each MOVE would add up to 10 full-room broadcasts per second
+			// per key-mashing client on top of the tick broadcast.
+			h.gameService.MoveSnake(roomID, playerID, direction)
 		case "START_GAME":
 			if !client.checkStateChangeCooldown() {
 				continue
@@ -268,7 +293,7 @@ func (h *HTTPWebSocketHandler) readPump(client *clientConn, roomID, playerID str
 				h.sendGameStateToRoom(roomID)
 			}
 		case "LEAVE":
-			// defer handles RemovePlayerFromRoom + state broadcast.
+			// defer handles RemoveSnakeFromRoom + state broadcast.
 			return
 		}
 	}
@@ -302,6 +327,30 @@ func (h *HTTPWebSocketHandler) closeClient(roomID string, client *clientConn) {
 		h.removeClient(roomID, client)
 		client.conn.Close()
 	})
+}
+
+// Shutdown closes every client connection so a graceful server exit does not
+// leave sockets hanging. http.Server.Shutdown does not track hijacked
+// connections (WebSockets), so this has to happen here.
+func (h *HTTPWebSocketHandler) Shutdown() {
+	type clientRef struct {
+		roomID string
+		client *clientConn
+	}
+
+	h.mu.RLock()
+	refs := make([]clientRef, 0, len(h.roomConnections))
+	for roomID, conns := range h.roomConnections {
+		for _, client := range conns {
+			refs = append(refs, clientRef{roomID: roomID, client: client})
+		}
+	}
+	h.mu.RUnlock()
+
+	// closeClient takes h.mu, so it runs after the lock above is released.
+	for _, ref := range refs {
+		h.closeClient(ref.roomID, ref.client)
+	}
 }
 
 func (h *HTTPWebSocketHandler) sendGameStateToRoom(roomID string) {

@@ -134,6 +134,7 @@ const MultiplayerLoginPage = () => {
               type="text"
               value={roomID}
               onChange={(e) => setRoomID(e.target.value)}
+              maxLength={64}
               className="w-full rounded-xl px-4 py-2 focus:outline-none focus:ring-2"
               style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', borderColor: 'var(--border-primary)' }}
               placeholder="请输入房间 ID"
@@ -146,6 +147,7 @@ const MultiplayerLoginPage = () => {
               type="text"
               value={playerID}
               onChange={(e) => setPlayerID(e.target.value)}
+              maxLength={64}
               className="w-full rounded-xl px-4 py-2 focus:outline-none focus:ring-2"
               style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', borderColor: 'var(--border-primary)' }}
               placeholder="请输入玩家 ID"
@@ -158,6 +160,7 @@ const MultiplayerLoginPage = () => {
               type="text"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
+              maxLength={32}
               className="w-full rounded-xl px-4 py-2 focus:outline-none focus:ring-2"
               style={{ backgroundColor: 'var(--bg-input)', color: 'var(--text-primary)', borderColor: 'var(--border-primary)' }}
               placeholder="请输入玩家昵称"

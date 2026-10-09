@@ -35,6 +35,18 @@ type Snake struct {
 	SlowTimer   int       `json:"slow_timer"`
 }
 
+// ParseDirection validates a direction string sent by a client. Unknown values
+// must be rejected before reaching ChangeDirection: ChangeDirection treats any
+// non-opposite value as valid, and Move has no default case, so an invalid
+// direction leaves the head in place and trips self-collision on the next tick.
+func ParseDirection(s string) (Direction, bool) {
+	switch Direction(s) {
+	case Up, Down, Left, Right:
+		return Direction(s), true
+	}
+	return "", false
+}
+
 func NewSnake(playerID, name string, startPos Point) *Snake {
 	return &Snake{
 		ID:        uuid.New().String(),

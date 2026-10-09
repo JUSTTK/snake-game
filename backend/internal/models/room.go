@@ -66,6 +66,20 @@ func (r *Room) RemovePlayer(playerID string) {
 	}
 }
 
+// RemoveSnakeByID removes the snake with the given snake ID. Disconnect cleanup
+// uses this instead of RemovePlayer: a reconnected client has already replaced
+// the snake its player_id pointed at, so removing by player_id would delete the
+// replacement.
+func (r *Room) RemoveSnakeByID(snakeID string) {
+	for i, player := range r.Players {
+		if player.ID == snakeID {
+			r.Players = append(r.Players[:i], r.Players[i+1:]...)
+			r.UpdatedAt = time.Now()
+			return
+		}
+	}
+}
+
 func (r *Room) GetSnake(playerID string) *Snake {
 	for _, player := range r.Players {
 		if player.PlayerID == playerID {

@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"snake-game/internal/config"
 	"snake-game/internal/handlers"
 	"snake-game/internal/services"
+	"syscall"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -56,7 +61,6 @@ func main() {
 	{
 		rooms.GET("", roomHandler.GetRooms)
 		rooms.POST("", roomHandler.CreateRoom)
-		rooms.POST("/:id/join", roomHandler.JoinRoom)
 	}
 
 	// WebSocket路由
@@ -67,8 +71,34 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	// 启动服务器
-	port := ":" + cfg.ServerPort
-	log.Printf("Server starting on port %s", port)
-	log.Fatal(r.Run(port))
+	srv := &http.Server{
+		Addr:              ":" + cfg.ServerPort,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	// 监听中断信号，收到后优雅退出
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		log.Printf("Server starting on port %s", cfg.ServerPort)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	<-ctx.Done()
+	log.Print("Shutting down")
+
+	// 先关闭 WebSocket 与游戏循环，否则 Shutdown 会一直等长连接
+	webSocketHandler.Shutdown()
+	gameService.Shutdown()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Graceful shutdown failed: %v", err)
+	}
 }

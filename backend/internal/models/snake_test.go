@@ -292,3 +292,25 @@ func TestSnake_KillIfShielded(t *testing.T) {
 		t.Errorf("expected shield timer 0, got %d", snake.ShieldTimer)
 	}
 }
+
+func TestParseDirection(t *testing.T) {
+	valid := []string{"UP", "DOWN", "LEFT", "RIGHT"}
+	for _, s := range valid {
+		direction, ok := ParseDirection(s)
+		if !ok {
+			t.Errorf("expected %q to be accepted", s)
+		}
+		if string(direction) != s {
+			t.Errorf("expected direction %q, got %q", s, direction)
+		}
+	}
+
+	// Anything else must be rejected: an unknown direction leaves the snake's
+	// head in place and kills it via self-collision on the next tick.
+	invalid := []string{"", "FOO", "up", "UP ", "REVERSE"}
+	for _, s := range invalid {
+		if _, ok := ParseDirection(s); ok {
+			t.Errorf("expected %q to be rejected", s)
+		}
+	}
+}
