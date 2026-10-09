@@ -133,8 +133,9 @@ http://localhost:5173
 
 - `GET /api/rooms`
 - `POST /api/rooms`
-- `POST /api/rooms/:id/join`
 - `GET /health`
+
+玩家加入房间走下面的 WebSocket（不用 HTTP 接口）。
 
 ### WebSocket
 

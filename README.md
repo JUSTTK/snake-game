@@ -204,6 +204,8 @@ docker-compose up --build -d
 | `MAP_HEIGHT` | `15` | 地图高度（格） |
 | `ALLOWED_ORIGINS` | `localhost:5173,localhost:8081,localhost:80` | 允许的 WebSocket Origin（逗号分隔，CSWSH 防护） |
 
+数值型变量若填了 0、负数或无法解析的值，会回落到默认值并打印一条警告日志，不会导致启动崩溃。
+
 前端开发态通过 Vite 代理 `/api` 与 `/ws` 到 `localhost:8081`；生产态用 `VITE_WS_URL` 指定 WebSocket 地址。
 
 ## 📡 API 接口
@@ -213,9 +215,10 @@ docker-compose up --build -d
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/rooms` | 获取所有房间 |
-| POST | `/api/rooms` | 创建新房间 |
-| POST | `/api/rooms/:id/join` | 加入指定房间 |
+| POST | `/api/rooms` | 创建新房间（等待 WebSocket 玩家加入） |
 | GET | `/health` | 健康检查 |
+
+玩家只能通过 WebSocket 加入房间（见下）。
 
 ### WebSocket 连接
 
